@@ -285,16 +285,19 @@ class _SavedPageState extends State<SavedPage> {
                         color: Colors.blue,
                       ),
                     ),
+                    // Updated navigation button onPressed method
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder:
-                              (_) => MainScaffold(
-                                initialIndex: 2,
-                                lat: lat,
-                                lng: lng,
-                              ),
+                          builder: (_) => MainScaffold(
+                            initialIndex: 2,
+                            lat: lat,
+                            lng: lng,
+                            address: address,
+                            photoUrl: photoUrl,
+                            name: name,
+                          ),
                         ),
                       );
                     },

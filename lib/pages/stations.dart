@@ -1403,9 +1403,14 @@ class _StationsPageState extends State<StationsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder:
-                        (_) =>
-                            MainScaffold(initialIndex: 2, lat: lat, lng: lng),
+                    builder: (_) => MainScaffold(
+                      initialIndex: 2,
+                      lat: lat,
+                      lng: lng,
+                      name: name,
+                      address: address,
+                      photoUrl: photoUrl, // Add this line to pass the photo URL
+                    ),
                   ),
                 );
               },
