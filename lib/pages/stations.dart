@@ -98,10 +98,10 @@ class _StationsPageState extends State<StationsPage> {
   }
 
   Future<void> searchStations(
-    String query, {
-    bool isInitialLoad = false,
-    bool loadMore = false,
-  }) async {
+      String query, {
+        bool isInitialLoad = false,
+        bool loadMore = false,
+      }) async {
     if (_isLoading) return;
 
     setState(() {
@@ -111,7 +111,7 @@ class _StationsPageState extends State<StationsPage> {
         _nextPageToken = null;
         // Update current query only when it's a new search (not load more)
         _currentQuery =
-            isInitialLoad ? 'train station UK' : '$query train station UK';
+        isInitialLoad ? 'train station UK' : '$query train station UK';
       }
     });
 
@@ -121,12 +121,12 @@ class _StationsPageState extends State<StationsPage> {
 
       if (loadMore && _nextPageToken != null) {
         url =
-            'https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=$_nextPageToken&key=$apiKey';
+        'https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=$_nextPageToken&key=$apiKey';
       } else {
         String searchQuery = _currentQuery;
 
         url =
-            'https://maps.googleapis.com/maps/api/place/textsearch/json?query=${Uri.encodeComponent(searchQuery)}&type=transit_station&key=$apiKey';
+        'https://maps.googleapis.com/maps/api/place/textsearch/json?query=${Uri.encodeComponent(searchQuery)}&type=transit_station&key=$apiKey';
       }
 
       final response = await http.get(Uri.parse(url));
@@ -294,24 +294,24 @@ class _StationsPageState extends State<StationsPage> {
         hintText: hint,
         prefixIcon: Icon(getIconForHint(hint)),
         suffixIcon:
-            controller.text.isNotEmpty
-                ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    controller.clear();
-                    if (!_isSwapped) {
-                      searchStations('train station UK', isInitialLoad: true);
-                    } else {
-                      // Clear routes when clearing route fields
-                      setState(() {
-                        _routeOptions = [];
-                        _routeSteps = [];
-                        _selectedRouteIndex = -1;
-                      });
-                    }
-                  },
-                )
-                : null,
+        controller.text.isNotEmpty
+            ? IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            controller.clear();
+            if (!_isSwapped) {
+              searchStations('train station UK', isInitialLoad: true);
+            } else {
+              // Clear routes when clearing route fields
+              setState(() {
+                _routeOptions = [];
+                _routeSteps = [];
+                _selectedRouteIndex = -1;
+              });
+            }
+          },
+        )
+            : null,
         filled: true,
         fillColor: Colors.white,
         enabledBorder: OutlineInputBorder(
@@ -327,10 +327,10 @@ class _StationsPageState extends State<StationsPage> {
   }
 
   Future<void> fetchTransitRoute(
-    String from,
-    String to, {
-    DateTime? departureTime,
-  }) async {
+      String from,
+      String to, {
+        DateTime? departureTime,
+      }) async {
     setState(() {
       _isRouteLoading = true;
       _routeSteps = [];
@@ -374,14 +374,14 @@ class _StationsPageState extends State<StationsPage> {
 
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/directions/json'
-      '?origin=$encodedFrom'
-      '&destination=$encodedTo'
-      '&mode=transit'
-      '&departure_time=$departureTimeSeconds'
-      '&alternatives=true'
-      '&avoid=tolls'
-      '&transit_mode=train|subway|tram|rail'
-      '&key=$googleApiKey',
+          '?origin=$encodedFrom'
+          '&destination=$encodedTo'
+          '&mode=transit'
+          '&departure_time=$departureTimeSeconds'
+          '&alternatives=true'
+          '&avoid=tolls'
+          '&transit_mode=train|subway|tram|rail'
+          '&key=$googleApiKey',
     );
 
     try {
@@ -427,7 +427,7 @@ class _StationsPageState extends State<StationsPage> {
           _selectedRouteIndex = -1;
           _routeSteps = [];
           _isRouteLoading =
-              false; // Set loading to false here when we have results
+          false; // Set loading to false here when we have results
         });
       } else {
         setState(() {
@@ -510,16 +510,16 @@ class _StationsPageState extends State<StationsPage> {
                 value: _selectedTimeRange,
                 isExpanded: true,
                 items:
-                    _timeRanges.map((range) {
-                      return DropdownMenuItem<String>(
-                        value: range,
-                        child: Text(
-                          range,
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
+                _timeRanges.map((range) {
+                  return DropdownMenuItem<String>(
+                    value: range,
+                    child: Text(
+                      range,
+                      style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
                 onChanged: (value) {
                   if (value != null) {
                     setState(() {
@@ -626,83 +626,83 @@ class _StationsPageState extends State<StationsPage> {
               hint: const Text('Select a route to view details'),
               isExpanded: true,
               items:
-                  _routeOptions.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final route = entry.value;
-                    final leg = route['legs'][0];
-                    final steps = leg['steps'] as List;
+              _routeOptions.asMap().entries.map((entry) {
+                final index = entry.key;
+                final route = entry.value;
+                final leg = route['legs'][0];
+                final steps = leg['steps'] as List;
 
-                    final transitSteps =
-                        steps
-                            .where((step) => step['travel_mode'] == 'TRANSIT')
-                            .toList();
+                final transitSteps =
+                steps
+                    .where((step) => step['travel_mode'] == 'TRANSIT')
+                    .toList();
 
-                    final lineName =
-                        transitSteps.isNotEmpty
-                            ? transitSteps
-                                    .first['transit_details']['line']['short_name'] ??
-                                transitSteps
-                                    .first['transit_details']['line']['name'] ??
-                                'Unknown line'
-                            : 'Unknown line';
+                final lineName =
+                transitSteps.isNotEmpty
+                    ? transitSteps
+                    .first['transit_details']['line']['short_name'] ??
+                    transitSteps
+                        .first['transit_details']['line']['name'] ??
+                    'Unknown line'
+                    : 'Unknown line';
 
-                    final duration =
-                        leg['duration']?['text'] ?? 'Unknown duration';
-                    final distance =
-                        leg['distance']?['text'] ?? 'Unknown distance';
-                    final departureTime = leg['departure_time']?['text'] ?? '';
-                    final arrivalTime = leg['arrival_time']?['text'] ?? '';
-                    final transfers =
-                        transitSteps.length > 1 ? transitSteps.length - 1 : 0;
+                final duration =
+                    leg['duration']?['text'] ?? 'Unknown duration';
+                final distance =
+                    leg['distance']?['text'] ?? 'Unknown distance';
+                final departureTime = leg['departure_time']?['text'] ?? '';
+                final arrivalTime = leg['arrival_time']?['text'] ?? '';
+                final transfers =
+                transitSteps.length > 1 ? transitSteps.length - 1 : 0;
 
-                    return DropdownMenuItem<int>(
-                      value: index,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.grey.shade300,
-                              width: index < _routeOptions.length - 1 ? 1 : 0,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text.rich(
-                              TextSpan(
-                                text: '$lineName: ',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: '$duration • $distance',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '$departureTime → $arrivalTime • '
-                              '${transfers == 0 ? 'Direct route' : '$transfers transfer${transfers == 1 ? '' : 's'}'}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
+                return DropdownMenuItem<int>(
+                  value: index,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: index < _routeOptions.length - 1 ? 1 : 0,
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text.rich(
+                          TextSpan(
+                            text: '$lineName: ',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: '$duration • $distance',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$departureTime → $arrivalTime • '
+                              '${transfers == 0 ? 'Direct route' : '$transfers transfer${transfers == 1 ? '' : 's'}'}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
               onChanged: (index) {
                 if (index != null) {
                   _selectRoute(index);
@@ -721,32 +721,32 @@ class _StationsPageState extends State<StationsPage> {
     final steps = _routeOptions[index]['legs'][0]['steps'];
 
     final transitSteps =
-        steps
-            .where(
-              (step) =>
-                  step['travel_mode'] == 'TRANSIT' &&
-                  step['transit_details'] != null,
-            )
-            .map<Map<String, String>>((step) {
-              final details = step['transit_details'];
-              final line = details['line'];
-              return {
-                'line':
-                    (line['short_name'] ?? line['name'] ?? 'Unknown line')
-                        .toString(),
-                'departure':
-                    (details['departure_stop']?['name'] ?? 'Unknown')
-                        .toString(),
-                'arrival':
-                    (details['arrival_stop']?['name'] ?? 'Unknown').toString(),
-                'numStops': (details['num_stops']?.toString() ?? '?'),
-                'departureTime':
-                    (details['departure_time']?['text'] ?? '-').toString(),
-                'arrivalTime':
-                    (details['arrival_time']?['text'] ?? '-').toString(),
-              };
-            })
-            .toList();
+    steps
+        .where(
+          (step) =>
+      step['travel_mode'] == 'TRANSIT' &&
+          step['transit_details'] != null,
+    )
+        .map<Map<String, String>>((step) {
+      final details = step['transit_details'];
+      final line = details['line'];
+      return {
+        'line':
+        (line['short_name'] ?? line['name'] ?? 'Unknown line')
+            .toString(),
+        'departure':
+        (details['departure_stop']?['name'] ?? 'Unknown')
+            .toString(),
+        'arrival':
+        (details['arrival_stop']?['name'] ?? 'Unknown').toString(),
+        'numStops': (details['num_stops']?.toString() ?? '?'),
+        'departureTime':
+        (details['departure_time']?['text'] ?? '-').toString(),
+        'arrivalTime':
+        (details['arrival_time']?['text'] ?? '-').toString(),
+      };
+    })
+        .toList();
 
     setState(() {
       _selectedRouteIndex = index;
@@ -781,58 +781,58 @@ class _StationsPageState extends State<StationsPage> {
           ),
           child: Column(
             children:
-                _routeSteps.asMap().entries.map((entry) {
-                  final step = entry.value;
+            _routeSteps.asMap().entries.map((entry) {
+              final step = entry.value;
 
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        text: '🚆 ${step['line']}: ',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        children: [
                           TextSpan(
-                            text: '🚆 ${step['line']}: ',
+                            text: () {
+                              final numStops =
+                                  int.tryParse('${step['numStops']}') ?? 0;
+                              return '$numStops stop${numStops > 1 ? 's' : ''}';
+                            }(),
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.normal,
                             ),
-                            children: [
-                              TextSpan(
-                                text: () {
-                                  final numStops =
-                                      int.tryParse('${step['numStops']}') ?? 0;
-                                  return '$numStops stop${numStops > 1 ? 's' : ''}';
-                                }(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                            ],
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${step['departure']} → ${step['arrival']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        Text(
-                          '${step['departureTime']} → ${step['arrivalTime']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${step['departure']} → ${step['arrival']}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[700],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    Text(
+                      '${step['departureTime']} → ${step['arrivalTime']}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
         ),
       ],
@@ -857,9 +857,9 @@ class _StationsPageState extends State<StationsPage> {
             'formatted_address': details['departure_stop']['name'],
             'place_id': 'route_stop_${stations.length}',
             'geometry':
-                details['departure_stop']['location'] != null
-                    ? {'location': details['departure_stop']['location']}
-                    : null,
+            details['departure_stop']['location'] != null
+                ? {'location': details['departure_stop']['location']}
+                : null,
           });
         }
 
@@ -870,9 +870,9 @@ class _StationsPageState extends State<StationsPage> {
             'formatted_address': details['arrival_stop']['name'],
             'place_id': 'route_stop_${stations.length}',
             'geometry':
-                details['arrival_stop']['location'] != null
-                    ? {'location': details['arrival_stop']['location']}
-                    : null,
+            details['arrival_stop']['location'] != null
+                ? {'location': details['arrival_stop']['location']}
+                : null,
           });
         }
       }
@@ -914,7 +914,7 @@ class _StationsPageState extends State<StationsPage> {
               }
 
               final detailed =
-                  placeId != null ? await getPlaceDetails(placeId) : null;
+              placeId != null ? await getPlaceDetails(placeId) : null;
 
               final merged = {
                 ...base,
@@ -958,9 +958,9 @@ class _StationsPageState extends State<StationsPage> {
     final website = station['website'];
 
     final photoRef =
-        (station['photos'] != null && station['photos'].isNotEmpty)
-            ? station['photos'][0]['photo_reference']
-            : null;
+    (station['photos'] != null && station['photos'].isNotEmpty)
+        ? station['photos'][0]['photo_reference']
+        : null;
     final photoUrl = _getPhotoUrl(photoRef);
 
     final lat = station['geometry']?['location']?['lat'];
@@ -1011,7 +1011,7 @@ class _StationsPageState extends State<StationsPage> {
                       final parentContext = context;
 
                       final TextEditingController _noteController =
-                          TextEditingController();
+                      TextEditingController();
 
                       if (alreadySaved) {
                         final existing = await getSavedStationByPlaceId(
@@ -1086,7 +1086,7 @@ class _StationsPageState extends State<StationsPage> {
                                                     'Station removed from saved',
                                                   ),
                                                   behavior:
-                                                      SnackBarBehavior.floating,
+                                                  SnackBarBehavior.floating,
                                                 ),
                                               );
                                             },
@@ -1106,7 +1106,7 @@ class _StationsPageState extends State<StationsPage> {
                                           onPressed: () async {
                                             Navigator.of(context).pop();
                                             final note =
-                                                _noteController.text.trim();
+                                            _noteController.text.trim();
                                             await saveStationToFirestore(
                                               placeId: placeId,
                                               name: name,
@@ -1124,21 +1124,21 @@ class _StationsPageState extends State<StationsPage> {
                                                   alreadySaved
                                                       ? 'Saved station updated'
                                                       : (note.isNotEmpty
-                                                          ? 'Station saved with note'
-                                                          : 'Station saved'),
+                                                      ? 'Station saved with note'
+                                                      : 'Station saved'),
                                                 ),
                                                 behavior:
-                                                    SnackBarBehavior.floating,
+                                                SnackBarBehavior.floating,
                                               ),
                                             );
                                           },
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
-                                                alreadySaved
-                                                    ? const Color(
-                                                      0xFF64B5F6,
-                                                    ) // Light blue
-                                                    : const Color(0xFFF48FB1),
+                                            alreadySaved
+                                                ? const Color(
+                                              0xFF64B5F6,
+                                            ) // Light blue
+                                                : const Color(0xFFF48FB1),
                                             // Light pink
                                             foregroundColor: Colors.white,
                                           ),
@@ -1220,71 +1220,71 @@ class _StationsPageState extends State<StationsPage> {
                           color: Colors.grey.shade50,
                         ),
                         child:
-                            photoUrl != null
-                                ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    photoUrl,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (
-                                      context,
-                                      child,
-                                      loadingProgress,
-                                    ) {
-                                      if (loadingProgress == null) return child;
-                                      return Center(
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: activePink,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              activePink.withOpacity(0.1),
-                                              cardColor,
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.train,
-                                          size: 40,
-                                          color: activePink.withOpacity(0.7),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                )
-                                : Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        activePink.withOpacity(0.1),
-                                        cardColor,
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.train,
-                                    size: 40,
-                                    color: activePink.withOpacity(0.7),
+                        photoUrl != null
+                            ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            photoUrl,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (
+                                context,
+                                child,
+                                loadingProgress,
+                                ) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: activePink,
                                   ),
                                 ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(
+                                    8,
+                                  ),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      activePink.withOpacity(0.1),
+                                      cardColor,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.train,
+                                  size: 40,
+                                  color: activePink.withOpacity(0.7),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                            : Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            gradient: LinearGradient(
+                              colors: [
+                                activePink.withOpacity(0.1),
+                                cardColor,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.train,
+                            size: 40,
+                            color: activePink.withOpacity(0.7),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1403,9 +1403,14 @@ class _StationsPageState extends State<StationsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder:
-                        (_) =>
-                            MainScaffold(initialIndex: 2, lat: lat, lng: lng),
+                    builder: (_) => MainScaffold(
+                      initialIndex: 2,
+                      lat: lat,
+                      lng: lng,
+                      name: name,
+                      address: address,
+                      photoUrl: photoUrl, 
+                    ),
                   ),
                 );
               },
@@ -1443,115 +1448,115 @@ class _StationsPageState extends State<StationsPage> {
                   // Station results
                   _isSwapped
                       ? (_selectedRouteIndex >= 0
-                          ? (_isRouteStationsLoading
-                              ? const SizedBox(
-                                height: 200,
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      CircularProgressIndicator(),
-                                      SizedBox(height: 16),
-                                      Text('Loading station details...'),
-                                    ],
-                                  ),
-                                ),
-                              )
-                              : Column(
-                                children:
-                                    _routeStations
-                                        .map(
-                                          (station) =>
-                                              buildStationCard(station),
-                                        )
-                                        .toList(),
-                              ))
-                          : (_fromController.text.isNotEmpty &&
-                                  _toController.text.isNotEmpty
-                              ? const SizedBox(
-                                height: 200,
-                              ) // Nothing while loading
-                              : const SizedBox(
-                                height: 200,
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.route,
-                                        size: 64,
-                                        color: Colors.grey,
-                                      ),
-                                      SizedBox(height: 16),
-                                      Text(
-                                        'Start searching for station routes',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )))
+                      ? (_isRouteStationsLoading
+                      ? const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Loading station details...'),
+                        ],
+                      ),
+                    ),
+                  )
+                      : Column(
+                    children:
+                    _routeStations
+                        .map(
+                          (station) =>
+                          buildStationCard(station),
+                    )
+                        .toList(),
+                  ))
+                      : (_fromController.text.isNotEmpty &&
+                      _toController.text.isNotEmpty
+                      ? const SizedBox(
+                    height: 200,
+                  ) // Nothing while loading
+                      : const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.route,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Start searching for station routes',
+                          ),
+                        ],
+                      ),
+                    ),
+                  )))
                       : // When not swapped, show regular station search results
-                      (_isLoading && _stations.isEmpty
-                          ? const SizedBox(
-                            height: 200,
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 16),
-                                  Text('Loading train stations...'),
-                                ],
-                              ),
+                  (_isLoading && _stations.isEmpty
+                      ? const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Loading train stations...'),
+                        ],
+                      ),
+                    ),
+                  )
+                      : _stations.isEmpty
+                      ? const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.train,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text('No train stations found.'),
+                        ],
+                      ),
+                    ),
+                  )
+                      : Column(
+                    children: [
+                      ..._stations.map(
+                            (station) => buildStationCard(station),
+                      ),
+                      if (_nextPageToken != null) ...[
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed:
+                          _isLoading ? null : loadMoreStations,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: activePink,
+                            foregroundColor: Colors.white,
+                          ),
+                          child:
+                          _isLoading
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
                             ),
                           )
-                          : _stations.isEmpty
-                          ? const SizedBox(
-                            height: 200,
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.train,
-                                    size: 64,
-                                    color: Colors.grey,
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text('No train stations found.'),
-                                ],
-                              ),
-                            ),
-                          )
-                          : Column(
-                            children: [
-                              ..._stations.map(
-                                (station) => buildStationCard(station),
-                              ),
-                              if (_nextPageToken != null) ...[
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed:
-                                      _isLoading ? null : loadMoreStations,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: activePink,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  child:
-                                      _isLoading
-                                          ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                          : const Text('Load More Stations'),
-                                ),
-                              ],
-                            ],
-                          )),
+                              : const Text('Load More Stations'),
+                        ),
+                      ],
+                    ],
+                  )),
                   const SizedBox(height: 16),
                 ],
               ),

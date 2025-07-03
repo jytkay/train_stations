@@ -21,10 +21,10 @@ class _SavedPageState extends State<SavedPage> {
       _isLoading = true;
     });
     final snapshot =
-        await FirebaseFirestore.instance
-            .collection('savedStations')
-            .orderBy('savedAt', descending: true)
-            .get();
+    await FirebaseFirestore.instance
+        .collection('savedStations')
+        .orderBy('savedAt', descending: true)
+        .get();
     setState(() {
       _stations = snapshot.docs.map((doc) => doc.data()).toList();
       _isLoading = false;
@@ -135,7 +135,7 @@ class _SavedPageState extends State<SavedPage> {
                                   await removeStationByPlaceId(placeId);
                                   setState(() {
                                     _stations.removeWhere(
-                                      (s) => s['placeId'] == placeId,
+                                          (s) => s['placeId'] == placeId,
                                     );
                                   });
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -175,7 +175,7 @@ class _SavedPageState extends State<SavedPage> {
                                   );
                                   setState(() {
                                     final index = _stations.indexWhere(
-                                      (s) => s['placeId'] == placeId,
+                                          (s) => s['placeId'] == placeId,
                                     );
                                     if (index != -1) {
                                       _stations[index] = {
@@ -237,20 +237,20 @@ class _SavedPageState extends State<SavedPage> {
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(12),
                   leading:
-                      photoUrl != null
-                          ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              photoUrl,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder:
-                                  (context, error, stackTrace) =>
-                                      const Icon(Icons.image_not_supported),
-                            ),
-                          )
-                          : const Icon(Icons.train),
+                  photoUrl != null
+                      ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      photoUrl,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder:
+                          (context, error, stackTrace) =>
+                      const Icon(Icons.image_not_supported),
+                    ),
+                  )
+                      : const Icon(Icons.train),
                   title: Text(
                     name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -285,16 +285,19 @@ class _SavedPageState extends State<SavedPage> {
                         color: Colors.blue,
                       ),
                     ),
+                    // Updated navigation button onPressed method
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder:
-                              (_) => MainScaffold(
-                                initialIndex: 2,
-                                lat: lat,
-                                lng: lng,
-                              ),
+                          builder: (_) => MainScaffold(
+                            initialIndex: 2,
+                            lat: lat,
+                            lng: lng,
+                            address: address,
+                            photoUrl: photoUrl,
+                            name: name,
+                          ),
                         ),
                       );
                     },
