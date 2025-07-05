@@ -11,14 +11,33 @@ class SavedPage extends StatefulWidget {
   State<SavedPage> createState() => _SavedPageState();
 }
 
-class _SavedPageState extends State<SavedPage> {
+class _SavedPageState extends State<SavedPage>
+    with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> _stations = [];
+  List<Map<String, dynamic>> _routes = [];
   final Set<String> _selectedPlaceIds = {};
-  bool _isLoading = true;
+  final Set<String> _selectedRouteIds = {};
+  bool _isLoadingStations = true;
+  bool _isLoadingRoutes = true;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadStations();
+    _loadRoutes();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadStations() async {
     setState(() {
-      _isLoading = true;
+      _isLoadingStations = true;
     });
     final snapshot =
     await FirebaseFirestore.instance
@@ -27,22 +46,81 @@ class _SavedPageState extends State<SavedPage> {
         .get();
     setState(() {
       _stations = snapshot.docs.map((doc) => doc.data()).toList();
-      _isLoading = false;
+      _isLoadingStations = false;
     });
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadStations();
+  Future<void> _loadRoutes() async {
+    setState(() {
+      _isLoadingRoutes = true;
+    });
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection('savedRoutes')
+            .orderBy('savedAt', descending: true)
+            .get();
+    setState(() {
+      _routes = snapshot.docs.map((doc) => doc.data()).toList();
+      _isLoadingRoutes = false;
+    });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+  Future<void> _removeRouteById(String routeId) async {
+    final query =
+        await FirebaseFirestore.instance
+            .collection('savedRoutes')
+            .where('routeId', isEqualTo: routeId)
+            .limit(1)
+            .get();
+    if (query.docs.isNotEmpty) {
+      await query.docs.first.reference.delete();
+    }
+  }
+
+  Future<void> _saveRouteToFirestore({
+    required String routeId,
+    required String fromStation,
+    required String toStation,
+    required List<Map<String, dynamic>> routeSteps,
+    required Map<String, dynamic> routeDetails,
+    String? note,
+  }) async {
+    final query =
+        await FirebaseFirestore.instance
+            .collection('savedRoutes')
+            .where('routeId', isEqualTo: routeId)
+            .limit(1)
+            .get();
+
+    final routeData = {
+      'routeId': routeId,
+      'fromStation': fromStation,
+      'toStation': toStation,
+      'routeSteps': routeSteps,
+      'routeDetails': routeDetails,
+      'note': note ?? '',
+      'savedAt': Timestamp.now(),
+    };
+
+    if (query.docs.isNotEmpty) {
+      await query.docs.first.reference.update(routeData);
+    } else {
+      await FirebaseFirestore.instance.collection('savedRoutes').add(routeData);
+    }
+  }
+
+  Widget _buildStationsTab() {
+    if (_isLoadingStations) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.pinkAccent),
+      );
     } else if (_stations.isEmpty) {
-      return const Center(child: Text('No saved stations yet.'));
+      return const Center(
+        child: Text(
+          'No saved stations yet.',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
     }
 
     return ListView.builder(
@@ -309,4 +387,3 @@ class _SavedPageState extends State<SavedPage> {
       },
     );
   }
-}

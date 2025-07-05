@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:group_assignment/pages/specific_station.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
 import 'package:group_assignment/firestore/save_stations.dart';
+import 'package:group_assignment/firestore/save_routes.dart';
 import 'dart:math';
 
 class StationsPage extends StatefulWidget {
@@ -84,6 +85,18 @@ class _StationsPageState extends State<StationsPage> {
       default:
         return true;
     }
+  }
+
+  String _generateRouteId() {
+    if (_selectedRouteIndex == -1 || _routeOptions.isEmpty) return '';
+
+    final route = _routeOptions[_selectedRouteIndex];
+    final leg = route['legs'][0];
+    final fromStation = _fromController.text.trim();
+    final toStation = _toController.text.trim();
+    final departureTime = leg['departure_time']?['text'] ?? '';
+
+    return '${fromStation}_${toStation}_$departureTime'.replaceAll(' ', '_');
   }
 
   @override
@@ -781,58 +794,58 @@ class _StationsPageState extends State<StationsPage> {
           ),
           child: Column(
             children:
-            _routeSteps.asMap().entries.map((entry) {
-              final step = entry.value;
+                _routeSteps.asMap().entries.map((entry) {
+                  final step = entry.value;
 
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text.rich(
-                      TextSpan(
-                        text: '🚆 ${step['line']}: ',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        children: [
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text.rich(
                           TextSpan(
-                            text: () {
-                              final numStops =
-                                  int.tryParse('${step['numStops']}') ?? 0;
-                              return '$numStops stop${numStops > 1 ? 's' : ''}';
-                            }(),
+                            text: '🚆 ${step['line']}: ',
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.normal,
+                              fontWeight: FontWeight.bold,
                             ),
+                            children: [
+                              TextSpan(
+                                text: () {
+                                  final numStops =
+                                      int.tryParse('${step['numStops']}') ?? 0;
+                                  return '$numStops stop${numStops > 1 ? 's' : ''}';
+                                }(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${step['departure']} → ${step['arrival']}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[700],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        Text(
+                          '${step['departureTime']} → ${step['arrivalTime']}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${step['departure']} → ${step['arrival']}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[700],
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                    Text(
-                      '${step['departureTime']} → ${step['arrivalTime']}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+                  );
+                }).toList(),
           ),
         ),
       ],
