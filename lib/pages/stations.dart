@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:group_assignment/pages/specific_station.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
 import 'package:group_assignment/firestore/save_stations.dart';
+import 'package:group_assignment/firestore/save_routes.dart';
 import 'dart:math';
 
 class StationsPage extends StatefulWidget {
@@ -84,6 +85,18 @@ class _StationsPageState extends State<StationsPage> {
       default:
         return true;
     }
+  }
+
+  String _generateRouteId() {
+    if (_selectedRouteIndex == -1 || _routeOptions.isEmpty) return '';
+
+    final route = _routeOptions[_selectedRouteIndex];
+    final leg = route['legs'][0];
+    final fromStation = _fromController.text.trim();
+    final toStation = _toController.text.trim();
+    final departureTime = leg['departure_time']?['text'] ?? '';
+
+    return '${fromStation}_${toStation}_$departureTime'.replaceAll(' ', '_');
   }
 
   @override
@@ -771,68 +784,271 @@ class _StationsPageState extends State<StationsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: cardColor),
-            borderRadius: BorderRadius.circular(10),
-            color: cardColor.withOpacity(0.5),
-          ),
-          child: Column(
-            children:
-                _routeSteps.asMap().entries.map((entry) {
-                  final step = entry.value;
+        GestureDetector(
+          onLongPress: () async {
+            if (_selectedRouteIndex == -1) return;
 
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            text: '🚆 ${step['line']}: ',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: () {
-                                  final numStops =
-                                      int.tryParse('${step['numStops']}') ?? 0;
-                                  return '$numStops stop${numStops > 1 ? 's' : ''}';
-                                }(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${step['departure']} → ${step['arrival']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        Text(
-                          '${step['departureTime']} → ${step['arrivalTime']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
+            final routeId = _generateRouteId();
+            final alreadySaved = await isRouteSaved(routeId);
+
+            showModalBottomSheet(
+              context: context,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              builder: (_) {
+                final messenger = ScaffoldMessenger.of(context);
+                final noteController = TextEditingController();
+
+                Future<void> _handleSave() async {
+                  final note = noteController.text.trim();
+                  final route = _routeOptions[_selectedRouteIndex];
+
+                  await saveRouteToFirestore(
+                    routeId: routeId,
+                    fromStation: _fromController.text.trim(),
+                    toStation: _toController.text.trim(),
+                    routeSteps: _routeSteps,
+                    routeDetailsRaw: route,
+                    // key change
+                    note: note,
+                  );
+
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        alreadySaved
+                            ? 'Saved route updated'
+                            : (note.isNotEmpty
+                                ? 'Route saved with note'
+                                : 'Route saved'),
+                      ),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
-                }).toList(),
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: Icon(
+                        alreadySaved ? Icons.edit : Icons.bookmark_add,
+                        color: alreadySaved ? Colors.blue : Colors.green,
+                      ),
+                      title: Text(
+                        alreadySaved ? 'Edit Saved Route' : 'Save Route',
+                        style: TextStyle(
+                          color: alreadySaved ? Colors.blue : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onTap: () async {
+                        if (alreadySaved) {
+                          final existing = await getSavedRouteById(routeId);
+                          noteController.text = existing?['note'] ?? '';
+                        }
+                        await showDialog(
+                          context: context,
+                          builder:
+                              (_) => Dialog(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1F4),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        alreadySaved
+                                            ? 'Edit Route Note'
+                                            : 'Add Route Note',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: noteController,
+                                        maxLines: 3,
+                                        decoration: InputDecoration(
+                                          hintText: 'Add note...',
+                                          enabledBorder: OutlineInputBorder(
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFF06292),
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFF06292),
+                                              width: 2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Row(
+                                        children: [
+                                          if (alreadySaved)
+                                            Expanded(
+                                              child: ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(
+                                                    0xFFFF8A80,
+                                                  ),
+                                                  foregroundColor: Colors.white,
+                                                ),
+                                                onPressed: () async {
+                                                  Navigator.pop(context);
+                                                  await removeRouteById(
+                                                    routeId,
+                                                  );
+                                                  messenger.showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'Route removed from saved',
+                                                      ),
+                                                      behavior:
+                                                          SnackBarBehavior
+                                                              .floating,
+                                                    ),
+                                                  );
+                                                },
+                                                child: const Text('Delete'),
+                                              ),
+                                            ),
+                                          if (alreadySaved)
+                                            const SizedBox(width: 12),
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    alreadySaved
+                                                        ? const Color(
+                                                          0xFF64B5F6,
+                                                        )
+                                                        : const Color(
+                                                          0xFFF48FB1,
+                                                        ),
+                                                foregroundColor: Colors.white,
+                                              ),
+                                              onPressed: () async {
+                                                Navigator.pop(context);
+                                                await _handleSave();
+                                              },
+                                              child: Text(
+                                                alreadySaved
+                                                    ? 'Update'
+                                                    : 'Save',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.alarm_add, color: Colors.green),
+                      title: const Text(
+                        'Add Reminder',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Reminder functionality coming soon!',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: cardColor),
+              borderRadius: BorderRadius.circular(10),
+              color: cardColor.withOpacity(0.5),
+            ),
+            child: Column(
+              children:
+                  _routeSteps.map((step) {
+                    final numStops = int.tryParse(step['numStops'] ?? '0') ?? 0;
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              text: '🚆 ${step['line']}: ',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text:
+                                      '$numStops stop${numStops > 1 ? 's' : ''}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${step['departure']} → ${step['arrival']}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[700],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${step['departureTime']} → ${step['arrivalTime']}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+            ),
           ),
         ),
       ],
