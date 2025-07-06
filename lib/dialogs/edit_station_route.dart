@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:group_assignment/api/google_api_key.dart';
 import 'package:group_assignment/firestore/save_stations.dart';
 import 'package:group_assignment/firestore/save_routes.dart';
+import 'package:group_assignment/firestore/save_reminders.dart';
+import 'package:group_assignment/dialogs/edit_reminder.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 
 Future<void> showEditStationBottomSheet({
@@ -24,7 +28,6 @@ Future<void> showEditStationBottomSheet({
   final lat = station['geometry']?['location']?['lat'];
   final lng = station['geometry']?['location']?['lng'];
   final alreadySaved = await isStationSaved(placeId);
-  const hasReminder = false;
 
   showModalBottomSheet(
     context: context,
@@ -91,30 +94,6 @@ Future<void> showEditStationBottomSheet({
               Navigator.pop(context);
             },
           ),
-          ListTile(
-            leading: Icon(
-              hasReminder ? Icons.alarm_off : Icons.alarm_add,
-              color: hasReminder ? Colors.red : Colors.green,
-            ),
-            title: Text(
-              hasReminder ? 'Remove Reminder' : 'Add Reminder',
-              style: TextStyle(
-                color: hasReminder ? Colors.red : Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            onTap: () {
-              Navigator.pop(context);
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    hasReminder ? 'Reminder removed' : 'Reminder added',
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-          ),
         ],
       );
     },
@@ -134,10 +113,52 @@ Future<void> showEditRouteBottomSheet({
   final messenger = ScaffoldMessenger.of(context);
   final alreadySaved = await isRouteSaved(routeId);
   final noteCtrl = TextEditingController();
+  const uid = '1000';
 
   if (alreadySaved) {
     final existing = await getSavedRouteById(routeId);
     noteCtrl.text = existing?['note'] ?? '';
+  }
+
+  final reminder = await getReminderForRoute(
+    userID: uid,
+    fromStation: fromStation,
+    toStation: toStation,
+  );
+
+  final hasReminder = reminder != null;
+
+  final rawDeparture = routeDetailsRaw['departure_time'];
+  final rawArrival = routeDetailsRaw['arrival_time'];
+
+  String departureTimeFormatted = '';
+  String arrivalTimeFormatted = '';
+  final formatter = DateFormat.jm(); // e.g., 6:05 PM
+
+  try {
+    if (rawDeparture is String) {
+      final dt = DateTime.parse(rawDeparture);
+      departureTimeFormatted = formatter.format(dt);
+    } else if (rawDeparture is Timestamp) {
+      departureTimeFormatted = formatter.format(rawDeparture.toDate());
+    }
+  } catch (_) {}
+
+  try {
+    if (rawArrival is String) {
+      final at = DateTime.parse(rawArrival);
+      arrivalTimeFormatted = formatter.format(at);
+    } else if (rawArrival is Timestamp) {
+      arrivalTimeFormatted = formatter.format(rawArrival.toDate());
+    }
+  } catch (_) {}
+
+  final now = DateTime.now();
+  if (departureTimeFormatted.isEmpty) {
+    departureTimeFormatted = formatter.format(now);
+  }
+  if (arrivalTimeFormatted.isEmpty) {
+    arrivalTimeFormatted = formatter.format(now.add(const Duration(minutes: 10)));
   }
 
   showModalBottomSheet(
@@ -175,8 +196,6 @@ Future<void> showEditRouteBottomSheet({
                 );
               },
               onSave: () async {
-                dev.log("noteCtrl: $noteCtrl");
-
                 await saveRouteToFirestore(
                   routeId: routeId,
                   fromStation: fromStation,
@@ -201,17 +220,42 @@ Future<void> showEditRouteBottomSheet({
           },
         ),
         ListTile(
-          leading: const Icon(Icons.alarm_add, color: Colors.green),
-          title: const Text(
-            'Add Reminder',
-            style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+          leading: Icon(
+            hasReminder ? Icons.alarm : Icons.alarm_add,
+            color: hasReminder ? Colors.blue : Colors.green,
           ),
-          onTap: () {
+          title: Text(
+            hasReminder ? 'Edit Reminder' : 'Add Reminder',
+            style: TextStyle(
+              color: hasReminder ? Colors.blue : Colors.green,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          onTap: () async {
             Navigator.pop(context);
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('Reminder functionality coming soon!'),
-                behavior: SnackBarBehavior.floating,
+
+            final result = await showDialog<Map<String, dynamic>>(
+              context: context,
+              builder: (_) => EditReminderDialog(
+                documentId: hasReminder ? reminder['documentId'] as String : '',
+                currentTime: hasReminder
+                    ? (reminder['alarmTime'] as Timestamp).toDate()
+                    : now.add(const Duration(minutes: 1)),
+                currentMode: hasReminder ? reminder['alarmMode'] ?? 'One Time' : 'One Time',
+                currentDays: hasReminder
+                    ? (reminder['selectedDays'] as List<dynamic>?)?.cast<String>() ?? []
+                    : [],
+                currentStatus: hasReminder ? reminder['notificationStatus'] ?? true : true,
+                hasReminder: hasReminder,
+                routeDetails: {
+                  'userID': uid,
+                  'routeId': routeId,
+                  'fromStation': fromStation,
+                  'toStation': toStation,
+                  'departureTime': departureTimeFormatted,
+                  'arrivalTime': arrivalTimeFormatted,
+                  'routeSteps': routeSteps,
+                },
               ),
             );
           },

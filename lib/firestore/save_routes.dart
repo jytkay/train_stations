@@ -43,19 +43,12 @@ Future<void> saveRouteToFirestore({
       'routeDetails': routeDetails,
       'routeDetailsRaw': routeDetailsRaw,
       'note': note ?? '',
-      // Don't update savedAt, alarmTime, or other immutable fields
     };
 
     await query.docs.first.reference.update(updateData);
   } else {
     // For new routes, include all fields
     final routeData = {
-      // Alarm details
-      'alarmMode': "One Time",
-      'alarmTime': Timestamp.now(),
-      'alarmStatus': true,
-      'notificationStatus': false,
-
       // Core metadata
       'routeId': routeId,
       'fromStation': fromStation,

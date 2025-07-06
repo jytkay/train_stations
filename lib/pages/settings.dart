@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:group_assignment/firestore/save_user.dart';
+import 'package:group_assignment/pages/about.dart';
+import 'package:group_assignment/pages/help_support.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -114,7 +116,12 @@ class SettingsPage extends StatelessWidget {
                     title: const Text('Help & Support'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
-                      // TODO: Navigate to help page
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HelpSupportPage(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(height: 1),
@@ -123,7 +130,12 @@ class SettingsPage extends StatelessWidget {
                     title: const Text('About'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
-                      // TODO: Navigate to about page
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AboutPage(),
+                        ),
+                      );
                     },
                   ),
                 ],

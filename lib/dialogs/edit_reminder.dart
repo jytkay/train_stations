@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:group_assignment/firestore/save_reminders.dart';
+import 'package:intl/intl.dart';
+import 'dart:developer' as dev;
 
 class EditReminderDialog extends StatefulWidget {
   final String documentId;
@@ -8,6 +9,8 @@ class EditReminderDialog extends StatefulWidget {
   final String? currentMode;
   final List<String>? currentDays;
   final bool currentStatus;
+  final bool hasReminder;
+  final Map<String, dynamic>? routeDetails; // Add this for new reminders
 
   const EditReminderDialog({
     super.key,
@@ -16,6 +19,8 @@ class EditReminderDialog extends StatefulWidget {
     this.currentMode,
     this.currentDays,
     required this.currentStatus,
+    required this.hasReminder,
+    this.routeDetails, // Add this parameter
   });
 
   @override
@@ -36,6 +41,8 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
   };
 
   bool isLoading = false;
+  String? departTimeFromSteps;
+  String? arriveTimeFromSteps;
 
   @override
   void initState() {
@@ -59,12 +66,63 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         }
       }
     }
+
+    final routeDetails = widget.routeDetails;
+    if (routeDetails != null) {
+      final routeStepsRaw = routeDetails['routeSteps'];
+      if (routeStepsRaw is List && routeStepsRaw.isNotEmpty) {
+        final firstStep = routeStepsRaw.first as Map<String, dynamic>;
+        final lastStep = routeStepsRaw.last as Map<String, dynamic>;
+
+        departTimeFromSteps = firstStep['departureTime']?.toString();
+        arriveTimeFromSteps = lastStep['arrivalTime']?.toString();
+
+        dev.log("Initialized default times: $departTimeFromSteps → $arriveTimeFromSteps");
+
+        // 🛠 Set default selectedTime if not editing an existing reminder
+        if (widget.currentTime == null && departTimeFromSteps != null) {
+          try {
+            final parsed = DateFormat('h:mm a').parse(departTimeFromSteps!);
+            final initial = DateTime(
+              DateTime.now().year,
+              DateTime.now().month,
+              DateTime.now().day,
+              parsed.hour,
+              parsed.minute,
+            ).subtract(const Duration(minutes: 30));
+            selectedTime = TimeOfDay.fromDateTime(initial);
+          } catch (e) {
+            dev.log("Failed to parse departure time: $e");
+          }
+        }
+      }
+    }
   }
 
   Future<void> _selectTime() async {
-    final TimeOfDay? picked = await showTimePicker(
+    // Fallback to current time if departTimeFromSteps is unavailable
+    DateTime initialDateTime = DateTime.now();
+
+    if (departTimeFromSteps != null) {
+      try {
+        // Parse the departure time (e.g., "2:30 PM")
+        final parsed = DateFormat('h:mm a').parse(departTimeFromSteps!);
+        initialDateTime = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+          parsed.hour,
+          parsed.minute,
+        ).subtract(const Duration(minutes: 30));
+      } catch (e) {
+        // If parsing fails, fallback to now
+        dev.log("Failed to parse departureTimeFromSteps: $e");
+      }
+    }
+
+    final picked = await showTimePicker(
       context: context,
-      initialTime: selectedTime ?? TimeOfDay.now(),
+      initialTime: TimeOfDay.fromDateTime(initialDateTime),
     );
 
     if (picked != null) {
@@ -83,7 +141,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
   bool _isValidConfiguration() {
     if (selectedTime == null) return false;
     if (reminderType == 'Daily' || reminderType == 'Custom Days') {
-      return selectedDays.values.any((isSelected) => isSelected);
+      return selectedDays.values.any((v) => v);
     }
     return true;
   }
@@ -94,6 +152,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         const SnackBar(
           content: Text('Please select a time and at least one day'),
           backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -122,24 +181,117 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
           .map((entry) => entry.key)
           .toList();
 
-      await updateAlarmDetails(
-        documentId: widget.documentId,
-        alarmTime: reminderDateTime,
-        alarmMode: reminderType,
-        isActive: widget.currentStatus,
-      );
+      if (widget.hasReminder) {
+        // Update existing reminder
+        await updateAlarmDetails(
+          documentId: widget.documentId,
+          alarmTime: reminderDateTime,
+          alarmMode: reminderType,
+          isActive: widget.currentStatus,
+          selectedDays: selectedDaysList,
+        );
+
+        if (mounted) {
+          Navigator.of(context).pop({
+            'time': reminderDateTime,
+            'mode': reminderType,
+            'days': reminderType == 'One Time' ? null : selectedDaysList,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reminder updated successfully'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        // Create new reminder
+        if (widget.routeDetails == null) {
+          throw Exception('Route details are required for new reminders');
+        }
+
+        final routeDetails = widget.routeDetails!;
+
+        var routeSteps = routeDetails['routeSteps'] as List<Map<String, dynamic>>;
+        var departTime;
+        var arriveTime;
+
+        if (routeSteps != null && routeSteps.isNotEmpty) {
+          final firstStep = routeSteps.first;
+          final lastStep = routeSteps.last;
+
+          departTime = firstStep['departureTime']?.toString();
+          arriveTime = lastStep['arrivalTime']?.toString();
+        }
+
+        await saveReminderToFirestore(
+          userID: routeDetails['userID'] as String,
+          routeId: routeDetails['routeId'] as String,
+          fromStation: routeDetails['fromStation'] as String,
+          toStation: routeDetails['toStation'] as String,
+          departureTime: departTime as String,
+          arrivalTime: arriveTime as String,
+          alarmTime: reminderDateTime,
+          alarmMode: reminderType,
+          isActive: true,
+          selectedDays: selectedDaysList,
+          routeSteps: routeDetails['routeSteps'] as List<Map<String, dynamic>>?,
+        );
+
+        if (mounted) {
+          Navigator.of(context).pop({
+            'saved': true,
+            'time': reminderDateTime,
+            'mode': reminderType,
+            'days': reminderType == 'One Time' ? null : selectedDaysList,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reminder created successfully'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to ${widget.hasReminder ? 'update' : 'create'} reminder: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteReminder() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await deleteReminder(widget.documentId);
 
       if (mounted) {
-        Navigator.of(context).pop({
-          'time': reminderDateTime,
-          'mode': reminderType,
-          'days': reminderType == 'One Time' ? null : selectedDaysList,
-        });
+        Navigator.of(context).pop({'delete': true});
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Reminder updated successfully'),
-            backgroundColor: Colors.green,
+            content: Text('Reminder deleted successfully'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -147,8 +299,8 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update reminder: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Failed to delete reminder: $e'),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -282,7 +434,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
                 selected: isSelected,
                 onSelected: (_) => _toggleDay(day),
                 selectedColor: Colors.pink.shade200,
-                checkmarkColor: Colors.white,
+                showCheckmark: false,
                 labelStyle: TextStyle(
                   color: isSelected ? Colors.white : Colors.black87,
                 ),
@@ -298,7 +450,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.pink.shade50,
-      title: const Text('Edit Reminder'),
+      title: Text(widget.hasReminder ? 'Edit Reminder' : 'Add Reminder'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -312,29 +464,61 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         ),
       ),
       actions: [
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop({'delete': true});
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF8A80),
-            foregroundColor: Colors.white,
-          ),
-          child: const Text('Delete'),
-        ),
-        ElevatedButton(
-          onPressed: isLoading ? null : _saveReminder,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF64B5F6),
-            foregroundColor: Colors.white,
-          ),
-          child: isLoading
-              ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-              : const Text('Edit'),
+        Row(
+          children: widget.hasReminder
+              ? [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _deleteReminder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8A80),
+                  foregroundColor: Colors.white,
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Text('Delete'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _saveReminder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF64B5F6),
+                  foregroundColor: Colors.white,
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Text('Edit'),
+              ),
+            ),
+          ]
+              : [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _saveReminder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF48FB1),
+                  foregroundColor: Colors.white,
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Text('Save'),
+              ),
+            ),
+          ],
         ),
       ],
     );
