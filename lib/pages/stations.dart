@@ -5,9 +5,9 @@ import 'package:group_assignment/api/google_api_key.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:group_assignment/pages/specific_station.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
-import 'package:group_assignment/firestore/save_stations.dart';
-import 'package:group_assignment/firestore/save_routes.dart';
+import 'package:group_assignment/dialogs/edit_station_route.dart';
 import 'dart:math';
+import 'dart:developer' as dev;
 
 class StationsPage extends StatefulWidget {
   const StationsPage({super.key});
@@ -27,7 +27,7 @@ class _StationsPageState extends State<StationsPage> {
   final _fromController = TextEditingController();
   final _toController = TextEditingController();
   final _departureTimeController = TextEditingController();
-  DateTime? _selectedDepartureTime;
+  DateTime? _selectedDepartureDay;
   List<dynamic> _routeStations = [];
   bool _isRouteStationsLoading = false;
   List<dynamic> _stations = [];
@@ -298,7 +298,7 @@ class _StationsPageState extends State<StationsPage> {
             fetchTransitRoute(
               fromStation,
               toStation,
-              departureTime: _selectedDepartureTime,
+              departureTime: _selectedDepartureDay,
             );
           }
         }
@@ -403,7 +403,6 @@ class _StationsPageState extends State<StationsPage> {
 
       if (data['status'] == 'OK' && data['routes'].isNotEmpty) {
         // Filter routes to only include train/rail routes
-        // Filter routes to only include train/rail routes
         List<dynamic> trainRoutes = [];
 
         for (var route in data['routes']) {
@@ -466,18 +465,18 @@ class _StationsPageState extends State<StationsPage> {
             onTap: () async {
               final date = await showDatePicker(
                 context: context,
-                initialDate: _selectedDepartureTime ?? DateTime.now(),
+                initialDate: _selectedDepartureDay ?? DateTime.now(),
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
               if (date != null) {
                 setState(() {
-                  _selectedDepartureTime = DateTime(
+                  _selectedDepartureDay = DateTime(
                     date.year,
                     date.month,
                     date.day,
-                    _selectedDepartureTime?.hour ?? DateTime.now().hour,
-                    _selectedDepartureTime?.minute ?? DateTime.now().minute,
+                    _selectedDepartureDay?.hour ?? DateTime.now().hour,
+                    _selectedDepartureDay?.minute ?? DateTime.now().minute,
                   );
                 });
                 // Trigger route search if both fields are filled
@@ -487,7 +486,7 @@ class _StationsPageState extends State<StationsPage> {
                   fetchTransitRoute(
                     fromStation,
                     toStation,
-                    departureTime: _selectedDepartureTime,
+                    departureTime: _selectedDepartureDay,
                   );
                 }
               }
@@ -500,8 +499,8 @@ class _StationsPageState extends State<StationsPage> {
                 color: Colors.white,
               ),
               child: Text(
-                _selectedDepartureTime != null
-                    ? '${_selectedDepartureTime!.day}/${_selectedDepartureTime!.month}/${_selectedDepartureTime!.year}'
+                _selectedDepartureDay != null
+                    ? '${_selectedDepartureDay!.day}/${_selectedDepartureDay!.month}/${_selectedDepartureDay!.year}'
                     : 'Today',
                 style: const TextStyle(fontSize: 14),
               ),
@@ -545,7 +544,7 @@ class _StationsPageState extends State<StationsPage> {
                       fetchTransitRoute(
                         fromStation,
                         toStation,
-                        departureTime: _selectedDepartureTime,
+                        departureTime: _selectedDepartureDay,
                       );
                     }
                   }
@@ -565,7 +564,7 @@ class _StationsPageState extends State<StationsPage> {
         child: Center(
           child: Column(
             children: [
-              CircularProgressIndicator(),
+              CircularProgressIndicator(color: Colors.pinkAccent),
               SizedBox(height: 8),
               Text('Searching for train routes...'),
             ],
@@ -778,74 +777,91 @@ class _StationsPageState extends State<StationsPage> {
   }
 
   Widget buildRouteSteps() {
+    dev.log('Route data: ${_routeOptions[_selectedRouteIndex]}');
+
     if (_routeSteps.isEmpty) return const SizedBox();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: cardColor),
-            borderRadius: BorderRadius.circular(10),
-            color: cardColor.withOpacity(0.5),
-          ),
-          child: Column(
-            children:
-                _routeSteps.asMap().entries.map((entry) {
-                  final step = entry.value;
+        GestureDetector(
+          onLongPress: () async {
+            if (_selectedRouteIndex == -1) return;
 
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            text: '🚆 ${step['line']}: ',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: () {
-                                  final numStops =
-                                      int.tryParse('${step['numStops']}') ?? 0;
-                                  return '$numStops stop${numStops > 1 ? 's' : ''}';
-                                }(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.normal,
-                                ),
+            final routeId   = _generateRouteId();
+            final routeRaw  = _routeOptions[_selectedRouteIndex];
+
+            await showEditRouteBottomSheet(
+              context: context,
+              routeId: routeId,
+              routeDetailsRaw: Map<String, dynamic>.from(routeRaw),
+              routeSteps: List<Map<String, dynamic>>.from(_routeSteps),
+              fromStation: _fromController.text.trim(),
+              toStation: _toController.text.trim(),
+              selectedDepartureDay: _selectedDepartureDay,
+              selectedTimeRange: _selectedTimeRange,
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: cardColor),
+              borderRadius: BorderRadius.circular(10),
+              color: cardColor.withOpacity(0.5),
+            ),
+            child: Column(
+              children:
+              _routeSteps.map((step) {
+                final numStops = int.tryParse(step['numStops'] ?? '0') ?? 0;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(
+                          text: '🚆 ${step['line']}: ',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          children: [
+                            TextSpan(
+                              text:
+                              '$numStops stop${numStops > 1 ? 's' : ''}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.normal,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${step['departure']} → ${step['arrival']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${step['departure']} → ${step['arrival']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[700],
                         ),
-                        Text(
-                          '${step['departureTime']} → ${step['arrivalTime']}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[700],
-                          ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${step['departureTime']} → ${step['arrivalTime']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[700],
                         ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           ),
         ),
       ],
@@ -964,7 +980,6 @@ class _StationsPageState extends State<StationsPage> {
   }
 
   Widget buildStationCard(dynamic station) {
-    final placeId = station['place_id'];
     final name = station['name'];
     final address = station['formatted_address'] ?? 'No address available';
     final phone = station['formatted_phone_number'];
@@ -988,229 +1003,10 @@ class _StationsPageState extends State<StationsPage> {
           ),
         );
       },
-      onLongPress: () async {
-        final alreadySaved = await isStationSaved(placeId);
-        final hasReminder = false; // Stub
-
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (BuildContext context) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Save / Edit Saved Station
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F4),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      alreadySaved ? Icons.edit : Icons.bookmark_add,
-                      color: alreadySaved ? Colors.blue : Colors.green,
-                    ),
-                    title: Text(
-                      alreadySaved ? 'Edit Saved Station' : 'Save Station',
-                      style: TextStyle(
-                        color: alreadySaved ? Colors.blue : Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final parentContext = context;
-
-                      final TextEditingController _noteController =
-                      TextEditingController();
-
-                      if (alreadySaved) {
-                        final existing = await getSavedStationByPlaceId(
-                          placeId,
-                        );
-                        _noteController.text = existing?['note'] ?? '';
-                      }
-
-                      // Show dialog first
-                      await showDialog(
-                        context: parentContext,
-                        builder: (BuildContext context) {
-                          return Dialog(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF1F4),
-                                // Light pink background
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    alreadySaved ? 'Edit Note' : 'Add Note',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _noteController,
-                                    maxLines: 3,
-                                    decoration: InputDecoration(
-                                      hintText: 'Add note...',
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(
-                                            0xFFF06292,
-                                          ), // Active pink border
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFF06292),
-                                          // Active pink border
-                                          width: 2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Row(
-                                    children: [
-                                      if (alreadySaved)
-                                        Expanded(
-                                          child: ElevatedButton(
-                                            onPressed: () async {
-                                              Navigator.of(context).pop();
-                                              await removeStationByPlaceId(
-                                                placeId,
-                                              );
-                                              messenger.showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Station removed from saved',
-                                                  ),
-                                                  behavior:
-                                                  SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                            },
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFFFF8A80,
-                                              ), // Light red
-                                              foregroundColor: Colors.white,
-                                            ),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ),
-                                      if (alreadySaved)
-                                        const SizedBox(width: 12),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: () async {
-                                            Navigator.of(context).pop();
-                                            final note =
-                                            _noteController.text.trim();
-                                            await saveStationToFirestore(
-                                              placeId: placeId,
-                                              name: name,
-                                              address: address,
-                                              phoneNumber: phone,
-                                              websiteUrl: website,
-                                              lat: lat,
-                                              lng: lng,
-                                              photoUrl: photoUrl,
-                                              note: note,
-                                            );
-                                            messenger.showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  alreadySaved
-                                                      ? 'Saved station updated'
-                                                      : (note.isNotEmpty
-                                                      ? 'Station saved with note'
-                                                      : 'Station saved'),
-                                                ),
-                                                behavior:
-                                                SnackBarBehavior.floating,
-                                              ),
-                                            );
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                            alreadySaved
-                                                ? const Color(
-                                              0xFF64B5F6,
-                                            ) // Light blue
-                                                : const Color(0xFFF48FB1),
-                                            // Light pink
-                                            foregroundColor: Colors.white,
-                                          ),
-                                          child: Text(
-                                            alreadySaved ? 'Edit' : 'Save',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-
-                      // Now it's safe to pop the bottom sheet
-                      Navigator.pop(parentContext);
-                    },
-                  ),
-                ),
-
-                // Reminder stub
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F4),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      hasReminder ? Icons.alarm_off : Icons.alarm_add,
-                      color: hasReminder ? Colors.red : Colors.green,
-                    ),
-                    title: Text(
-                      hasReminder ? 'Remove Reminder' : 'Add Reminder',
-                      style: TextStyle(
-                        color: hasReminder ? Colors.red : Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            hasReminder ? 'Reminder removed' : 'Reminder added',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      onLongPress: () => showEditStationBottomSheet(
+        context: context,
+        station: Map<String, dynamic>.from(station),
+      ),
       child: Stack(
         children: [
           Card(
@@ -1249,10 +1045,7 @@ class _StationsPageState extends State<StationsPage> {
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: activePink,
-                                  ),
+                                  child: CircularProgressIndicator(color: Colors.pinkAccent),
                                 ),
                               );
                             },
@@ -1422,7 +1215,7 @@ class _StationsPageState extends State<StationsPage> {
                       lng: lng,
                       name: name,
                       address: address,
-                      photoUrl: photoUrl, 
+                      photoUrl: photoUrl,
                     ),
                   ),
                 );
@@ -1468,7 +1261,7 @@ class _StationsPageState extends State<StationsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(),
+                          CircularProgressIndicator(color: Colors.pinkAccent),
                           SizedBox(height: 16),
                           Text('Loading station details...'),
                         ],
@@ -1516,7 +1309,7 @@ class _StationsPageState extends State<StationsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(),
+                          CircularProgressIndicator(color: Colors.pinkAccent),
                           SizedBox(height: 16),
                           Text('Loading train stations...'),
                         ],
@@ -1560,10 +1353,7 @@ class _StationsPageState extends State<StationsPage> {
                               ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            child: CircularProgressIndicator(color: Colors.pinkAccent),
                           )
                               : const Text('Load More Stations'),
                         ),

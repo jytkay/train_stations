@@ -189,7 +189,7 @@ class _MapPageState extends State<MapPage> {
       "https://www.google.com/maps/dir/?api=1"
           "&origin=$currentLat,$currentLng"
           "&destination=${widget.lat},${widget.lng}"
-          "&travelmode=transit", // You can use "driving", "walking", or "bicycling" too
+          "&travelmode=transit", // transport mode: public transport
     );
 
     if (await canLaunchUrl(url)) {
@@ -203,7 +203,6 @@ class _MapPageState extends State<MapPage> {
       );
     }
   }
-
 
   void _startLocationStream() {
     const locationSettings = LocationSettings(

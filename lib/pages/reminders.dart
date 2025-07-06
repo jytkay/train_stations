@@ -1,34 +1,40 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:group_assignment/firestore/save_reminders.dart';
+import 'package:group_assignment/dialogs/edit_reminder.dart';
+
+/// Dummy user identifier; swap out for an auth‑based uid when ready.
+const String userID = '1000';
 
 class RemindersPage extends StatefulWidget {
   const RemindersPage({super.key});
 
   @override
-  _RemindersPageState createState() => _RemindersPageState();
+  State<RemindersPage> createState() => _RemindersPageState();
 }
 
-String userID = "1000";
-
 class _RemindersPageState extends State<RemindersPage> {
-  final collectionRoutes = FirebaseFirestore.instance.collection("savedRoutes");
+  // Firestore‑derived data
   List<Map<String, dynamic>> items = [];
+
+  // UI bookkeeping
+  final Map<String, bool> switchStates = {};
+  final Map<String, DateTime?> selectedTimes = {};
+
   bool isLoaded = false;
   String? errorMessage;
-  Map<String, bool> switchStates = {};
-  Map<String, DateTime?> selectedTimes = {};
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _fetchData();
-    // Set up a periodic timer to check reminder times every minute
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _checkReminderTimes();
-    });
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+          (_) => _checkReminderTimes(),
+    );
   }
 
   @override
@@ -37,23 +43,50 @@ class _RemindersPageState extends State<RemindersPage> {
     super.dispose();
   }
 
+  /// Pull reminders for the current user
+  Future<void> _fetchData() async {
+    try {
+      final data = await getRemindersByUser(userID);
+
+      for (final doc in data) {
+        final documentId = doc['documentId'] as String;
+        switchStates[documentId] = doc['notificationStatus'] ?? false;
+        selectedTimes[documentId] =
+            (doc['alarmTime'] as Timestamp?)?.toDate();
+      }
+
+      setState(() {
+        items = data;
+        isLoaded = true;
+        errorMessage = null;
+      });
+
+      _checkReminderTimes();
+    } catch (e) {
+      setState(() {
+        isLoaded = true;
+        errorMessage = 'Error loading data: $e';
+      });
+    }
+  }
+
+  /// Validate alarms and reschedule/disable when necessary
   void _checkReminderTimes() {
     if (!mounted) return;
 
     bool needsUpdate = false;
     final now = DateTime.now();
 
-    for (var entry in selectedTimes.entries) {
+    for (final entry in selectedTimes.entries) {
       final documentId = entry.key;
       final reminderTime = entry.value;
 
       if (reminderTime == null || switchStates[documentId] != true) continue;
 
       final item = items.firstWhere(
-            (item) => item['documentId'] == documentId,
-        orElse: () => {},
+            (it) => it['documentId'] == documentId,
+        orElse: () => <String, dynamic>{},
       );
-
       if (item.isEmpty) continue;
 
       final isDaily = item['alarmMode'] == 'Daily';
@@ -61,73 +94,24 @@ class _RemindersPageState extends State<RemindersPage> {
 
       if (now.isAfter(reminderTime)) {
         if (isDaily) {
-          // For daily reminders, add 1 day and update Firestore
-          DateTime newTime = reminderTime.add(const Duration(days: 1));
+          final newTime = reminderTime.add(const Duration(days: 1));
           selectedTimes[documentId] = newTime;
           needsUpdate = true;
-
-          // Update Firestore with new time
-          collectionRoutes.doc(documentId).update({
-            'alarmTime': Timestamp.fromDate(newTime),
-          }).catchError((e) {
-            debugPrint('Error updating daily reminder time: $e');
-          });
+          updateReminderTime(documentId: documentId, newTime: newTime);
         } else if (isOneTime) {
-          // For one-time reminders, turn off the switch
           switchStates[documentId] = false;
           needsUpdate = true;
-
-          collectionRoutes.doc(documentId).update({
-            'notificationStatus': false,
-          }).catchError((e) {
-            debugPrint('Error turning off one-time reminder: $e');
-          });
+          setReminderStatus(documentId: documentId, isActive: false);
         }
       }
     }
 
-    if (needsUpdate && mounted) {
-      setState(() {});
-    }
+    if (needsUpdate && mounted) setState(() {});
   }
 
-  Future<void> _fetchData() async {
-    try {
-      List<Map<String, dynamic>> tempList = [];
-      var data = await collectionRoutes.where('userID', isEqualTo: userID).get();
-
-      for (var element in data.docs) {
-        var docData = element.data();
-        docData['documentId'] = element.id;
-        tempList.add(docData);
-
-        final documentId = element.id;
-        final notificationActive = docData['notificationStatus'] ?? false;
-        final notificationTime = docData['alarmTime']?.toDate();
-
-        switchStates[documentId] = notificationActive;
-        selectedTimes[documentId] = notificationTime;
-      }
-
-      setState(() {
-        items = tempList;
-        isLoaded = true;
-        errorMessage = null;
-      });
-
-      // Check times immediately after loading data
-      _checkReminderTimes();
-    } catch (e) {
-      setState(() {
-        isLoaded = true;
-        errorMessage = 'Error loading data: $e';
-      });
-      debugPrint('Error fetching data: $e');
-    }
-  }
-
-  Widget _buildReminderCard(Map<String, dynamic> item, int index) {
-    final documentId = item['documentId'];
+  /// Card builder
+  Widget _buildReminderCard(Map<String, dynamic> item) {
+    final documentId = item['documentId'] as String;
     final fromStation = item['fromStation']?.toString() ?? 'Unknown';
     final toStation = item['toStation']?.toString() ?? 'Unknown';
     final routeDetails = item['routeDetails'] as Map<String, dynamic>?;
@@ -138,137 +122,125 @@ class _RemindersPageState extends State<RemindersPage> {
         DateTime? reminderTime = selectedTimes[documentId];
 
         if (reminderTime == null && item['alarmTime'] != null) {
-          reminderTime = item['alarmTime'].toDate();
+          reminderTime = (item['alarmTime'] as Timestamp).toDate();
           selectedTimes[documentId] = reminderTime;
         }
 
-        // Automatically handle passed reminders
-        if (reminderTime != null && DateTime.now().isAfter(reminderTime)) {
+        if (reminderTime != null &&
+            DateTime.now().isAfter(reminderTime) &&
+            item['alarmMode'] == 'One Time' &&
+            switchStates[documentId] == true) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (item['alarmMode'] == 'One Time' && switchStates[documentId] == true) {
-              setState(() {
-                switchStates[documentId] = false;
-              });
-              collectionRoutes.doc(documentId).update({
-                'notificationStatus': false,
-              });
-            }
+            setState(() => switchStates[documentId] = false);
+            setReminderStatus(documentId: documentId, isActive: false);
           });
         }
 
         Future<void> selectTime() async {
-          try {
-            DateTime fallback = reminderTime ?? DateTime.now();
-            final TimeOfDay? picked = await showTimePicker(
-              context: context,
-              initialTime: TimeOfDay.fromDateTime(fallback),
-            );
+          final fallback = reminderTime ?? DateTime.now();
+          final picked = await showTimePicker(
+            context: context,
+            initialTime: TimeOfDay.fromDateTime(fallback),
+          );
+          if (picked == null) return;
 
-            if (picked == null) return;
+          final repeatChoice = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Reminder Type'),
+              content: const Text('Should this reminder repeat daily?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Once'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Daily'),
+                ),
+              ],
+            ),
+          );
+          if (repeatChoice == null) return;
 
-            final bool? repeatChoice = await showDialog<bool>(
+          final now = DateTime.now();
+          DateTime selected = DateTime(
+            now.year,
+            now.month,
+            now.day,
+            picked.hour,
+            picked.minute,
+          );
+          if (selected.isBefore(now)) {
+            selected = selected.add(const Duration(days: 1));
+          }
+
+          setState(() {
+            selectedTimes[documentId] = selected;
+            item['alarmMode'] = repeatChoice ? 'Daily' : 'One Time';
+            item['alarmTime'] = Timestamp.fromDate(selected);
+          });
+
+          await updateAlarmDetails(
+            documentId: documentId,
+            alarmTime: selected,
+            alarmMode: repeatChoice ? 'Daily' : 'One Time',
+            isActive: switchStates[documentId] ?? false,
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reminder time updated'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
+        return GestureDetector(
+          onTap: () async {
+            final result = await showDialog<Map<String, dynamic>>(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Reminder Type'),
-                content: const Text('Should this reminder repeat daily?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Once'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Daily'),
-                  ),
-                ],
+              builder: (context) => EditReminderDialog(
+                documentId: documentId,
+                currentTime: selectedTimes[documentId],
+                currentMode: item['alarmMode'],
+                currentDays: item['selectedDays']?.cast<String>(),
+                currentStatus: switchStates[documentId] ?? false,
               ),
             );
 
-            if (repeatChoice == null) return;
-
-            final DateTime now = DateTime.now();
-            DateTime selected = DateTime(
-              now.year,
-              now.month,
-              now.day,
-              picked.hour,
-              picked.minute,
-            );
-
-            if (selected.isBefore(now)) {
-              selected = selected.add(const Duration(days: 1));
+            if (result != null) {
+              setState(() {
+                selectedTimes[documentId] = result['time'];
+                item['alarmMode'] = result['mode'];
+                item['selectedDays'] = result['days'];
+                item['alarmTime'] = Timestamp.fromDate(result['time']);
+              });
             }
-
-            setState(() {
-              selectedTimes[documentId] = selected;
-              item['alarmMode'] = repeatChoice ? 'Daily' : 'One Time';
-              item['alarmTime'] = Timestamp.fromDate(selected);
-            });
-
-            await collectionRoutes.doc(documentId).update({
-              'alarmTime': selected,
-              'alarmMode': repeatChoice ? 'Daily' : 'One Time',
-              'notificationStatus': switchStates[documentId] ?? false,
-            });
-
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Reminder time updated'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error updating reminder: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        }
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                Text(
-                  '$fromStation → $toStation',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+          },
+          child: Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Text(
+                    '$fromStation → $toStation',
+                    style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 6,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (departureTime != 'N/A') ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'Estimated Train Time: $departureTime',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: GestureDetector(
-                        onTap: selectTime,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // Time button (first)
+                      Expanded(
+                        flex: 2,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(8),
@@ -294,86 +266,116 @@ class _RemindersPageState extends State<RemindersPage> {
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 2,
-                      child: Switch(
-                        value: switchStates[documentId] ?? false,
-                        onChanged: (value) async {
-                          if (value && selectedTimes[documentId] == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please set a reminder time first'),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
-                            return;
-                          }
+                      const SizedBox(width: 8),
 
-                          // Don't allow turning on if it's a one-time reminder that has passed
-                          if (value &&
-                              selectedTimes[documentId] != null &&
-                              DateTime.now().isAfter(selectedTimes[documentId]!) &&
-                              item['alarmMode'] == 'One Time') {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('This one-time reminder has already passed'),
-                                backgroundColor: Colors.orange,
+                      // Departure time details (middle)
+                      Expanded(
+                        flex: 6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (departureTime != 'N/A') ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Estimated Train Time: $departureTime',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[700],
+                                ),
                               ),
-                            );
-                            return;
-                          }
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
 
-                          setState(() {
-                            switchStates[documentId] = value;
-                          });
+                      // Switch toggle (last)
+                      Expanded(
+                        flex: 2,
+                        child: Switch(
+                          value: switchStates[documentId] ?? false,
+                          onChanged: (value) async {
+                            if (value && selectedTimes[documentId] == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please set a reminder time first'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
 
-                          try {
-                            await collectionRoutes.doc(documentId).update({
-                              'notificationStatus': value,
-                            });
-                          } catch (e) {
-                            setState(() {
-                              switchStates[documentId] = !value;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to update: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        },
+                            final alarm = selectedTimes[documentId];
+                            if (value &&
+                                alarm != null &&
+                                DateTime.now().isAfter(alarm) &&
+                                item['alarmMode'] == 'One Time') {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('This one‑time reminder has already passed'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+
+                            setState(() => switchStates[documentId] = value);
+
+                            try {
+                              await setReminderStatus(
+                                documentId: documentId,
+                                isActive: value,
+                              );
+                            } catch (e) {
+                              setState(() => switchStates[documentId] = !value);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to update: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                if (switchStates[documentId] == true && selectedTimes[documentId] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              'Reminder active for ${DateFormat('MMM d, hh:mm a').format(selectedTimes[documentId]!)} (${item['alarmMode'] == 'Daily' ? 'Daily' : 'One-time'})',
-                              style: const TextStyle(fontSize: 12, color: Colors.green),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
-              ],
+                  if (switchStates[documentId] == true &&
+                      selectedTimes[documentId] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_outline,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Reminder active for '
+                                    '${DateFormat('MMM d, hh:mm a').format(selectedTimes[documentId]!)} '
+                                    '(${item['alarmMode'] == 'Daily' ? 'Daily' : 'One‑time'})',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
@@ -384,7 +386,8 @@ class _RemindersPageState extends State<RemindersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
+      body: ListView(
+        padding: EdgeInsets.zero,
         children: [
           SizedBox(
             width: double.infinity,
@@ -392,34 +395,22 @@ class _RemindersPageState extends State<RemindersPage> {
             child: Image.asset(
               'assets/images/big bang.jpg',
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[200],
-                  child: const Icon(
-                    Icons.notifications,
-                    size: 50,
-                    color: Colors.grey,
-                  ),
-                );
-              },
+              errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey[200],
+                child: const Icon(Icons.notifications, size: 50, color: Colors.grey),
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          Expanded(
-            child: isLoaded
-                ? errorMessage != null
-                ? Center(child: Text(errorMessage!))
-                : items.isEmpty
-                ? const Center(child: Text('No reminders found'))
-                : ListView(
-              children: items
-                  .asMap()
-                  .entries
-                  .map((entry) => _buildReminderCard(entry.value, entry.key))
-                  .toList(),
-            )
-                : const Center(child: CircularProgressIndicator()),
-          ),
+          if (!isLoaded)
+            const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 80), child: CircularProgressIndicator(color: Colors.pinkAccent)))
+          else if (errorMessage != null)
+            Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 80), child: Text(errorMessage!)))
+          else if (items.isEmpty)
+              const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 80), child: Text('No reminders found')))
+            else
+              ...items.map(_buildReminderCard).toList(),
+          const SizedBox(height: 40),
         ],
       ),
     );

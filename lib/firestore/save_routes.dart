@@ -6,81 +6,101 @@ Future<void> saveRouteToFirestore({
   required String routeId,
   required String fromStation,
   required String toStation,
+  required DateTime? selectedDepartureDay,
+  required String selectedTimeRange,
   required List<Map<String, dynamic>> routeSteps,
   required Map<String, dynamic> routeDetailsRaw,
   String? note,
 }) async {
   // Current user ID (or fallback)
-  final uid = 'anonymous';
+  final uid = '1000';
 
-  // Only the required detail fields
+  // Save the detail fields
+  final legs = routeDetailsRaw['legs'] as List?;
+  final leg = legs?.isNotEmpty == true ? legs!.first : null;
+
   final routeDetails = {
-    'arrivalTime': routeDetailsRaw['arrivalTime'],
-    'departureTime': routeDetailsRaw['departureTime'],
-    'distance': routeDetailsRaw['distance'],
-    'duration': routeDetailsRaw['duration'],
-    'selectedDepartureTime': null,
-    'selectedTimeRange':
-        routeDetailsRaw['selectedTimeRange'] ?? 'Any depart time',
-  };
-
-  final routeData = {
-    // Alarm placeholders
-    'alarmMode': null,
-    'alarmTime': null,
-
-    // Core metadata
-    'routeId': routeId,
-    'fromStation': fromStation,
-    'toStation': toStation,
-    'routeSteps': routeSteps,
-    'routeDetails': routeDetails,
-    'note': note ?? '',
-
-    // Notification & tracking
-    'notificationStatus': null,
-    'savedAt': Timestamp.now(),
-    'userID': uid,
+    'arrivalTime' : leg?['arrival_time']?['text'] ?? '',
+    'departureTime' : leg?['departure_time']?['text'] ?? '',
+    'distance' : leg?['distance']?['text'] ?? '',
+    'duration' : leg?['duration']?['text'] ?? '',
+    'selectedDepartureDay': selectedDepartureDay,
+    'selectedTimeRange'    : selectedTimeRange,
   };
 
   final query =
-      await _routesCollection
-          .where('routeId', isEqualTo: routeId)
-          .limit(1)
-          .get();
+  await _routesCollection
+      .where('routeId', isEqualTo: routeId)
+      .limit(1)
+      .get();
 
   if (query.docs.isNotEmpty) {
-    await query.docs.first.reference.update(routeData);
+    // For updates, only update specific fields that can change
+    final updateData = {
+      'fromStation': fromStation,
+      'toStation': toStation,
+      'routeSteps': routeSteps,
+      'routeDetails': routeDetails,
+      'routeDetailsRaw': routeDetailsRaw,
+      'note': note ?? '',
+      // Don't update savedAt, alarmTime, or other immutable fields
+    };
+
+    await query.docs.first.reference.update(updateData);
   } else {
+    // For new routes, include all fields
+    final routeData = {
+      // Alarm details
+      'alarmMode': "One Time",
+      'alarmTime': Timestamp.now(),
+      'alarmStatus': true,
+      'notificationStatus': false,
+
+      // Core metadata
+      'routeId': routeId,
+      'fromStation': fromStation,
+      'toStation': toStation,
+      'routeSteps': routeSteps,
+      'routeDetails': routeDetails,
+      'note': note ?? '',
+
+      // Tracking
+      'savedAt': Timestamp.now(),
+      'userID': uid,
+    };
+
+    // Also store the raw route data for editing purposes
+    routeData['routeDetailsRaw'] = routeDetailsRaw;
+
     await _routesCollection.add(routeData);
   }
 }
 
 Future<bool> isRouteSaved(String routeId) async {
   final query =
-      await _routesCollection
-          .where('routeId', isEqualTo: routeId)
-          .limit(1)
-          .get();
+  await _routesCollection
+      .where('routeId', isEqualTo: routeId)
+      .limit(1)
+      .get();
   return query.docs.isNotEmpty;
 }
 
 Future<Map<String, dynamic>?> getSavedRouteById(String routeId) async {
   final query =
-      await _routesCollection
-          .where('routeId', isEqualTo: routeId)
-          .limit(1)
-          .get();
+  await _routesCollection
+      .where('routeId', isEqualTo: routeId)
+      .limit(1)
+      .get();
   if (query.docs.isNotEmpty) return query.docs.first.data();
   return null;
 }
 
 Future<void> removeRouteById(String routeId) async {
   final query =
-      await _routesCollection
-          .where('routeId', isEqualTo: routeId)
-          .limit(1)
-          .get();
+  await _routesCollection
+      .where('routeId', isEqualTo: routeId)
+      .limit(1)
+      .get();
   if (query.docs.isNotEmpty) {
     await query.docs.first.reference.delete();
   }

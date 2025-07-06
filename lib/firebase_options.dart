@@ -65,4 +65,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'mobile-grp.firebasestorage.app',
     iosBundleId: 'inti.edu.groupAssignment',
   );
+
 }

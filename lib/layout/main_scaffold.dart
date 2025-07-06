@@ -9,6 +9,9 @@ class MainScaffold extends StatefulWidget {
   final int initialIndex;
   final double? lat;
   final double? lng;
+  final String? name;
+  final String? address;
+  final String? photoUrl;
   final bool showAppBar;
 
   const MainScaffold({
@@ -16,6 +19,9 @@ class MainScaffold extends StatefulWidget {
     this.initialIndex = 0,
     this.lat,
     this.lng,
+    this.name,
+    this.address,
+    this.photoUrl,
     this.showAppBar = true,
   });
 
@@ -40,22 +46,40 @@ class _MainScaffoldState extends State<MainScaffold> {
     final List<Widget> pages = [
       const StationsPage(),
       const SavedPage(),
-      MapPage(lat: widget.lat, lng: widget.lng),
+      MapPage(lat: widget.lat, lng: widget.lng, name: widget.name, address: widget.address, photoUrl: widget.photoUrl),
       const RemindersPage(),
       const SettingsPage(),
     ];
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar:
-          widget.showAppBar
-              ? AppBar(
-                title: const Text(
-                  'Train Stations',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              )
-              : null,
+      appBar: widget.showAppBar
+          ? AppBar(
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8), // adjust radius as needed
+              child: Image.asset(
+                'assets/icons/icon.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                const Icon(Icons.train),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'UK TRAIN GO',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.pink.shade700, // activePink
+              ),
+            ),
+          ],
+        ),
+      )
+          : null,
       body: pages[_selectedIndex],
       floatingActionButton: FloatingActionButton(
         backgroundColor: navBarColor,

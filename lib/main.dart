@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:group_assignment/login.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:group_assignment/firestore/auth_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +39,8 @@ class MyApp extends StatelessWidget {
           unselectedItemColor: Colors.black54,
         ),
       ),
-      home: isLoggedIn ? const MainScaffold() : const LoginPage(),
+      home: const MainScaffold(),
+      //home: const AuthWrapper(),
     );
   }
 }
