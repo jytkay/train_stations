@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:group_assignment/firestore/save_user.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:group_assignment/pages/register.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
 
@@ -14,6 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -45,43 +47,114 @@ class _LoginPageState extends State<LoginPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final user = await signInWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
+      final user = userCredential.user;
+
       if (user != null && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const MainScaffold(),
-          ),
-        );
+        await user.reload(); // Refresh user's info
+        if (user.emailVerified) {
+          final userId = user.uid;
+
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => MainScaffold(userId: userId),
+            ),
+          );
+
+          _showSuccessSnackBar('Login successful!');
+        } else {
+          await _auth.signOut(); // Sign out if not verified
+          _showEmailVerificationDialog();
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found for that email.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Wrong password provided.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This user account has been disabled.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many attempts. Please try again later.';
+          break;
+        case 'invalid-credential':
+          errorMessage = 'Invalid email or password.';
+          break;
+        default:
+          errorMessage = 'An error occurred. Please try again.';
+      }
+      _showErrorDialog(errorMessage);
+    } catch (_) {
+      if (mounted) _showErrorDialog('An unexpected error occurred. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    try {
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final user = userCredential.user;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        await _auth.signOut();
+        _showSuccessSnackBar('Verification email sent! Please check your inbox and spam folder.');
       }
     } catch (e) {
-      if (mounted) {
-        _showErrorDialog(e.toString().replaceAll('Exception: ', ''));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      _showErrorDialog('Failed to send verification email. Please try again.');
     }
+  }
+
+  void _showEmailVerificationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Email Not Verified'),
+        content: const Text('Please verify your email before logging in. Check your inbox and spam folder.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _resendVerificationEmail();
+            },
+            child: const Text('Resend Email'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _forgotPassword() async {
@@ -91,10 +164,23 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      await sendPasswordResetEmail(_emailController.text.trim());
-      _showSuccessSnackBar('Password reset email sent! Check your inbox.');
+      await _auth.sendPasswordResetEmail(email: _emailController.text.trim());
+      _showSuccessSnackBar('Password reset email sent! Check your inbox and spam folder.');
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found for that email address.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        default:
+          errorMessage = 'An error occurred. Please try again.';
+      }
+      _showErrorDialog(errorMessage);
     } catch (e) {
-      _showErrorDialog(e.toString().replaceAll('Exception: ', ''));
+      _showErrorDialog('An unexpected error occurred. Please try again.');
     }
   }
 
@@ -289,7 +375,7 @@ class _LoginPageState extends State<LoginPage> {
                             );
                           },
                           child: Text(
-                            'Sign Up',
+                            'Register',
                             style: TextStyle(
                               color: Colors.pink.shade700,
                               fontWeight: FontWeight.w600,

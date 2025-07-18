@@ -6,10 +6,9 @@ import 'package:group_assignment/firestore/save_reminders.dart';
 import 'package:group_assignment/dialogs/edit_reminder.dart';
 import 'dart:developer' as dev;
 
-const String userID = '1000'; // dummy uid
-
 class RemindersPage extends StatefulWidget {
-  const RemindersPage({super.key});
+  final String userId;
+  const RemindersPage({super.key, required this.userId});
   @override
   State<RemindersPage> createState() => _RemindersPageState();
 }
@@ -29,7 +28,7 @@ class _RemindersPageState extends State<RemindersPage> {
 
   Future<void> _fetchData() async {
     try {
-      final data = await getRemindersByUser(userID);
+      final data = await getRemindersByUser(widget.userId);
       for (final doc in data) {
         final id = doc['documentId'] as String;
         switchStates[id] = doc['notificationStatus'] ?? false;
@@ -149,6 +148,7 @@ class _RemindersPageState extends State<RemindersPage> {
                   item['alarmTime'] = Timestamp.fromDate(result['time']);
                 });
               }
+              _fetchData();
             }
           },
           child: Card(

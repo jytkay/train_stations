@@ -67,6 +67,28 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
       }
     }
 
+    // Extract departure and arrival times from route details
+    _extractTimesFromRouteDetails();
+
+    // Set default selectedTime if not editing an existing reminder
+    if (widget.currentTime == null && departTimeFromSteps != null && !widget.hasReminder) {
+      try {
+        final parsed = DateFormat('h:mm a').parse(departTimeFromSteps!);
+        final initial = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+          parsed.hour,
+          parsed.minute,
+        ).subtract(const Duration(minutes: 30));
+        selectedTime = TimeOfDay.fromDateTime(initial);
+      } catch (e) {
+        dev.log("Failed to parse departure time: $e");
+      }
+    }
+  }
+
+  void _extractTimesFromRouteDetails() {
     final routeDetails = widget.routeDetails;
     if (routeDetails != null) {
       final routeStepsRaw = routeDetails['routeSteps'];
@@ -78,51 +100,48 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         arriveTimeFromSteps = lastStep['arrivalTime']?.toString();
 
         dev.log("Initialized default times: $departTimeFromSteps → $arriveTimeFromSteps");
-
-        // 🛠 Set default selectedTime if not editing an existing reminder
-        if (widget.currentTime == null && departTimeFromSteps != null) {
-          try {
-            final parsed = DateFormat('h:mm a').parse(departTimeFromSteps!);
-            final initial = DateTime(
-              DateTime.now().year,
-              DateTime.now().month,
-              DateTime.now().day,
-              parsed.hour,
-              parsed.minute,
-            ).subtract(const Duration(minutes: 30));
-            selectedTime = TimeOfDay.fromDateTime(initial);
-          } catch (e) {
-            dev.log("Failed to parse departure time: $e");
-          }
-        }
       }
     }
   }
 
   Future<void> _selectTime() async {
-    // Fallback to current time if departTimeFromSteps is unavailable
-    DateTime initialDateTime = DateTime.now();
+    // Ensure we have the latest route details
+    if (departTimeFromSteps == null) {
+      _extractTimesFromRouteDetails();
+    }
 
-    if (departTimeFromSteps != null) {
+    dev.log('departTimeFromSteps $departTimeFromSteps');
+
+    // Use existing selectedTime if available, otherwise calculate from departure time
+    TimeOfDay initialTime;
+
+    if (selectedTime != null) {
+      initialTime = selectedTime!;
+    } else if (departTimeFromSteps != null && !widget.hasReminder) {
+      // Only use departTimeFromSteps for new reminders
       try {
         // Parse the departure time (e.g., "2:30 PM")
         final parsed = DateFormat('h:mm a').parse(departTimeFromSteps!);
-        initialDateTime = DateTime(
+        final initialDateTime = DateTime(
           DateTime.now().year,
           DateTime.now().month,
           DateTime.now().day,
           parsed.hour,
           parsed.minute,
         ).subtract(const Duration(minutes: 30));
+        initialTime = TimeOfDay.fromDateTime(initialDateTime);
       } catch (e) {
         // If parsing fails, fallback to now
         dev.log("Failed to parse departureTimeFromSteps: $e");
+        initialTime = TimeOfDay.now();
       }
+    } else {
+      initialTime = TimeOfDay.now();
     }
 
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(initialDateTime),
+      initialTime: initialTime,
     );
 
     if (picked != null) {
@@ -182,7 +201,6 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
           .toList();
 
       if (widget.hasReminder) {
-        // Update existing reminder
         await updateAlarmDetails(
           documentId: widget.documentId,
           alarmTime: reminderDateTime,
@@ -192,22 +210,25 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         );
 
         if (mounted) {
-          Navigator.of(context).pop({
-            'time': reminderDateTime,
-            'mode': reminderType,
-            'days': reminderType == 'One Time' ? null : selectedDaysList,
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
+          final snackBarFuture = ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Reminder updated successfully'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
-          );
+          ).closed;
+
+          await snackBarFuture;
+
+          if (mounted) {
+            Navigator.of(context).pop({
+              'time': reminderDateTime,
+              'mode': reminderType,
+              'days': reminderType == 'One Time' ? null : selectedDaysList,
+            });
+          }
         }
       } else {
-        // Create new reminder
         if (widget.routeDetails == null) {
           throw Exception('Route details are required for new reminders');
         }
@@ -218,7 +239,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         var departTime;
         var arriveTime;
 
-        if (routeSteps != null && routeSteps.isNotEmpty) {
+        if (routeSteps.isNotEmpty) {
           final firstStep = routeSteps.first;
           final lastStep = routeSteps.last;
 
@@ -227,7 +248,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
         }
 
         await saveReminderToFirestore(
-          userID: routeDetails['userID'] as String,
+          userId: routeDetails['userId'] as String,
           routeId: routeDetails['routeId'] as String,
           fromStation: routeDetails['fromStation'] as String,
           toStation: routeDetails['toStation'] as String,
@@ -237,24 +258,28 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
           alarmMode: reminderType,
           isActive: true,
           selectedDays: selectedDaysList,
-          routeSteps: routeDetails['routeSteps'] as List<Map<String, dynamic>>?,
+          routeSteps: routeSteps,
         );
 
         if (mounted) {
-          Navigator.of(context).pop({
-            'saved': true,
-            'time': reminderDateTime,
-            'mode': reminderType,
-            'days': reminderType == 'One Time' ? null : selectedDaysList,
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
+          final snackBarFuture = ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Reminder created successfully'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
-          );
+          ).closed;
+
+          await snackBarFuture;
+
+          if (mounted) {
+            Navigator.of(context).pop({
+              'saved': true,
+              'time': reminderDateTime,
+              'mode': reminderType,
+              'days': reminderType == 'One Time' ? null : selectedDaysList,
+            });
+          }
         }
       }
     } catch (e) {
@@ -314,6 +339,32 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
   }
 
   Widget _buildTimeSelector() {
+    String timeText;
+
+    if (selectedTime != null && widget.hasReminder) {
+      timeText = selectedTime!.format(context);
+      dev.log("Default Time: " + timeText);
+    } else if (departTimeFromSteps != null && !widget.hasReminder) {
+      dev.log("Time found! $departTimeFromSteps");
+      // Show the calculated default time for new reminders
+      try {
+        final cleaned = departTimeFromSteps!.replaceAll('\u202F', ' ');
+        final parsed = DateFormat('h:mm a').parse(cleaned);
+        final defaultTime = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+          parsed.hour,
+          parsed.minute,
+        ).subtract(const Duration(minutes: 30));
+        timeText = TimeOfDay.fromDateTime(defaultTime).format(context);
+      } catch (e) {
+        timeText = 'No time selected';
+      }
+    } else {
+      timeText = 'No time selected';
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -327,9 +378,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              selectedTime != null
-                  ? selectedTime!.format(context)
-                  : 'No time selected',
+              timeText,
               style: const TextStyle(fontSize: 16),
             ),
           ),

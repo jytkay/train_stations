@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:group_assignment/firestore/save_reports.dart';
 
 class HelpSupportPage extends StatefulWidget {
   const HelpSupportPage({super.key});
@@ -17,8 +18,10 @@ class _HelpSupportPageState extends State<HelpSupportPage> {
     super.dispose();
   }
 
-  void _submitFeedback() {
-    if (_feedbackController.text.trim().isEmpty) {
+  void _submitFeedback() async {
+    final message = _feedbackController.text.trim();
+
+    if (message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter your feedback before submitting.'),
@@ -28,14 +31,23 @@ class _HelpSupportPageState extends State<HelpSupportPage> {
       return;
     }
 
-    // TODO: Implement feedback submission logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Thank you for your feedback!'),
-        backgroundColor: Colors.green.shade600,
-      ),
-    );
-    _feedbackController.clear();
+    try {
+      await saveUserReport(message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Thank you for your feedback!'),
+          backgroundColor: Colors.green.shade600,
+        ),
+      );
+      _feedbackController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error submitting feedback. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 final _routesCollection = FirebaseFirestore.instance.collection('savedRoutes');
 
 Future<void> saveRouteToFirestore({
+  required String userId,
   required String routeId,
   required String fromStation,
   required String toStation,
@@ -12,9 +13,6 @@ Future<void> saveRouteToFirestore({
   required Map<String, dynamic> routeDetailsRaw,
   String? note,
 }) async {
-  // Current user ID (or fallback)
-  final uid = '1000';
-
   // Save the detail fields
   final legs = routeDetailsRaw['legs'] as List?;
   final leg = legs?.isNotEmpty == true ? legs!.first : null;
@@ -59,7 +57,7 @@ Future<void> saveRouteToFirestore({
 
       // Tracking
       'savedAt': Timestamp.now(),
-      'userID': uid,
+      'userId': userId,
     };
 
     // Also store the raw route data for editing purposes
@@ -96,5 +94,25 @@ Future<void> removeRouteById(String routeId) async {
       .get();
   if (query.docs.isNotEmpty) {
     await query.docs.first.reference.delete();
+  }
+}
+
+Future<void> updateNoteForRoute({
+  required String userId,
+  required String routeId,
+  required String newNote,
+}) async {
+  final query = await _routesCollection
+      .where('userId', isEqualTo: userId)
+      .where('routeId', isEqualTo: routeId)
+      .limit(1)
+      .get();
+
+  if (query.docs.isNotEmpty) {
+    await query.docs.first.reference.update({
+      'note': newNote,
+    });
+  } else {
+    throw Exception('Route not found for user.');
   }
 }

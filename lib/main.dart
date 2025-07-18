@@ -39,8 +39,8 @@ class MyApp extends StatelessWidget {
           unselectedItemColor: Colors.black54,
         ),
       ),
-      home: const MainScaffold(),
-      //home: const AuthWrapper(),
+      //home: const MainScaffold(),
+      home: const AuthWrapper(),
     );
   }
 }

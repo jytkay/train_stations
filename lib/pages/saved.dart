@@ -8,7 +8,8 @@ import 'package:group_assignment/dialogs/edit_station_route.dart';
 import 'dart:developer' as dev;
 
 class SavedPage extends StatefulWidget {
-  const SavedPage({super.key});
+  final String userId;
+  const SavedPage({super.key, required this.userId});
 
   @override
   State<SavedPage> createState() => _SavedPageState();
@@ -29,8 +30,6 @@ class _SavedPageState extends State<SavedPage>
   List<Map<String, dynamic>> _routes = [];
   List<Map<String, dynamic>> _filteredStations = [];
   List<Map<String, dynamic>> _filteredRoutes = [];
-  final Set<String> _selectedPlaceIds = {};
-  final Set<String> _selectedRouteIds = {};
   bool _isLoadingStations = true;
   bool _isLoadingRoutes = true;
   late TabController _tabController;
@@ -55,12 +54,25 @@ class _SavedPageState extends State<SavedPage>
   Future<void> _loadStations() async {
     setState(() {
       _isLoadingStations = true;
+      _stations = [];
+      _filteredStations = [];
     });
-    final snapshot =
-    await FirebaseFirestore.instance
+
+    final snapshot = await FirebaseFirestore.instance
         .collection('savedStations')
+        .where('userId', isEqualTo: widget.userId)
         .orderBy('savedAt', descending: true)
         .get();
+
+    dev.log('userId' + widget.userId);
+
+    if (snapshot.docs.isEmpty) {
+      setState(() {
+        _isLoadingStations = false;
+      });
+      return;
+    }
+
     setState(() {
       _stations = snapshot.docs.map((doc) => doc.data()).toList();
       _filteredStations = List.from(_stations);
@@ -72,12 +84,23 @@ class _SavedPageState extends State<SavedPage>
   Future<void> _loadRoutes() async {
     setState(() {
       _isLoadingRoutes = true;
+      _routes = [];
+      _filteredRoutes = [];
     });
-    final snapshot =
-    await FirebaseFirestore.instance
+
+    final snapshot = await FirebaseFirestore.instance
         .collection('savedRoutes')
+        .where('userId', isEqualTo: widget.userId)
         .orderBy('savedAt', descending: true)
         .get();
+
+    if (snapshot.docs.isEmpty) {
+      setState(() {
+        _isLoadingRoutes = false;
+      });
+      return;
+    }
+
     setState(() {
       _routes = snapshot.docs.map((doc) => doc.data()).toList();
       _filteredRoutes = List.from(_routes);
@@ -379,18 +402,6 @@ class _SavedPageState extends State<SavedPage>
     );
   }
 
-  Future<void> _removeRouteById(String routeId) async {
-    final query =
-    await FirebaseFirestore.instance
-        .collection('savedRoutes')
-        .where('routeId', isEqualTo: routeId)
-        .limit(1)
-        .get();
-    if (query.docs.isNotEmpty) {
-      await query.docs.first.reference.delete();
-    }
-  }
-
   Widget _buildStationsTab() {
     if (_isLoadingStations) {
       return const Center(
@@ -400,7 +411,8 @@ class _SavedPageState extends State<SavedPage>
     if (_filteredStations.isEmpty) {
       return const Center(
         child: Text(
-          'No saved stations yet.',
+          'No saved stations yet.\nLong press a station to save!',
+          textAlign: TextAlign.center,
           style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
@@ -421,7 +433,7 @@ class _SavedPageState extends State<SavedPage>
         final phone = station['phoneNumber'];
         final website = station['websiteUrl'];
 
-        dev.log("SpecificStationPage station: $station");
+        //dev.log("SpecificStationPage station: $station");
 
         return GestureDetector(
           onTap: () {
@@ -432,20 +444,27 @@ class _SavedPageState extends State<SavedPage>
               ),
             );
           },
-          onLongPress: () => showEditStationBottomSheet(
-            context: context,
-            station: {
-              'place_id': placeId,
-              'name': name,
-              'formatted_address': address,
-              'formatted_phone_number': phone,
-              'website': website,
-              'photoUrl': photoUrl,
-              'geometry': {
-                'location': {'lat': lat, 'lng': lng}
+          onLongPress: () async {
+            final result = await showEditStationBottomSheet(
+              userId: widget.userId,
+              context: context,
+              station: {
+                'place_id': placeId,
+                'name': name,
+                'formatted_address': address,
+                'formatted_phone_number': phone,
+                'website': website,
+                'photoUrl': photoUrl,
+                'geometry': {
+                  'location': {'lat': lat, 'lng': lng}
+                },
               },
-            },
-          ),
+            );
+
+            if (result == true) {
+              _loadStations();
+            }
+          },
           child: Stack(
             children: [
               Card(
@@ -519,6 +538,7 @@ class _SavedPageState extends State<SavedPage>
                         context,
                         MaterialPageRoute(
                           builder: (_) => MainScaffold(
+                            userId: widget.userId,
                             initialIndex: 2,
                             lat: lat,
                             lng: lng,
@@ -547,7 +567,8 @@ class _SavedPageState extends State<SavedPage>
     if (_filteredRoutes.isEmpty) {
       return const Center(
         child: Text(
-          'No saved routes yet. Look up a route and long press it to save!',
+          'No saved routes yet.\nLook up a route and long press it to save!',
+          textAlign: TextAlign.center,
           style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
@@ -583,16 +604,23 @@ class _SavedPageState extends State<SavedPage>
               ),
             );
           },
-          onLongPress: () => showEditRouteBottomSheet(
-            context: context,
-            routeId: routeId,
-            routeDetailsRaw: route['routeDetailsRaw'] as Map<String, dynamic>? ?? {},
-            routeSteps: routeSteps,
-            fromStation: fromStation,
-            toStation: toStation,
-            selectedDepartureDay: selectedDay,
-            selectedTimeRange: selectedRange,
-          ),
+          onLongPress: () async {
+            final result = await showEditRouteBottomSheet(
+              userId: widget.userId,
+              context: context,
+              routeId: routeId,
+              routeDetailsRaw: route['routeDetailsRaw'] as Map<String, dynamic>? ?? {},
+              routeSteps: routeSteps,
+              fromStation: fromStation,
+              toStation: toStation,
+              selectedDepartureDay: selectedDay,
+              selectedTimeRange: selectedRange,
+            );
+
+            if (result == true) {
+              _loadRoutes();
+            }
+          },
           child: Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.symmetric(vertical: 8),

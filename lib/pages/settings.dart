@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:group_assignment/firestore/save_user.dart';
 import 'package:group_assignment/pages/about.dart';
 import 'package:group_assignment/pages/help_support.dart';
+import 'package:group_assignment/pages/login.dart';
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  final String userId;
+  const SettingsPage({super.key, required this.userId});
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
@@ -19,9 +21,14 @@ class SettingsPage extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(context).pop();
-              await signOut();
-              // AuthWrapper will automatically handle navigation to login page
+              Navigator.of(context).pop(); // Close dialog
+              await signOut(); // Sign out from Firebase
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                      (route) => false, // Remove all previous routes
+                );
+              }
             },
             child: Text(
               'Sign Out',
@@ -30,6 +37,62 @@ class SettingsPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please enter your email and password to confirm deletion.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final email = emailController.text.trim();
+                final password = passwordController.text.trim();
+
+                Navigator.of(context).pop(); // Close the dialog
+                await deleteUserAccount(context, email, password);
+              },
+              child: Text(
+                'Delete',
+                style: TextStyle(color: Colors.red.shade700),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -49,6 +112,7 @@ class SettingsPage extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       CircleAvatar(
                         radius: 30,
@@ -81,6 +145,13 @@ class SettingsPage extends StatelessWidget {
                             ),
                           ],
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          _showDeleteAccountDialog(context);
+                        },
+                        tooltip: 'Delete Account',
                       ),
                     ],
                   ),

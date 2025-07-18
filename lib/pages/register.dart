@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:group_assignment/firestore/save_user.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:group_assignment/layout/main_scaffold.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -15,6 +16,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -44,38 +47,120 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
-    setState(() {
-      _isLoading = true;
-    });
+  Future<Map<String, dynamic>> _getNextUserId() async {
+    try {
+      final counterDoc = await _firestore.collection('counters').doc('userCounter').get();
+      int nextId = 1001;
+
+      if (counterDoc.exists) {
+        int currentCount = counterDoc.data()?['count'] ?? 1000;
+        nextId = currentCount + 1;
+      }
+
+      await _firestore.collection('counters').doc('userCounter').set({
+        'count': nextId,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      return {
+        'userId': "'$nextId'", // Store with single quotes: '1001', '1002', etc.
+        'documentId': 'U-$nextId',   // Use U- prefix for document ID
+      };
+    } catch (e) {
+      throw Exception('Failed to generate user ID: ${e.toString()}');
+    }
+  }
+
+  Future<bool> _isDocumentIdUnique(String documentId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(documentId).get();
+      return !doc.exists;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
-      final user = await registerWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-        _nameController.text.trim(),
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      if (user != null && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const MainScaffold(),
-          ),
-        );
+      final user = userCredential.user;
+
+      if (user != null) {
+        // Send email verification
+        await user.sendEmailVerification();
+
+        // Generate custom user ID & document ID
+        final userIdData = await _getNextUserId();
+        final documentId = userIdData['documentId'] as String;
+
+        if (!await _isDocumentIdUnique(documentId)) {
+          throw Exception('Generated document ID already exists');
+        }
+
+        await user.updateDisplayName(_nameController.text.trim());
+
+        await _firestore.collection('users').doc(documentId).set({
+          'userId': user.uid,
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (mounted) {
+          _showSuccessSnackBar(
+            'Account created! A verification email has been sent. Please verify before logging in.',
+          );
+          await _auth.signOut(); // Prevents auto-login
+          Navigator.of(context).pop(); // Return to login screen
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        String errorMessage;
+        switch (e.code) {
+          case 'weak-password':
+            errorMessage = 'The password provided is too weak.';
+            break;
+          case 'email-already-in-use':
+            errorMessage = 'An account already exists for that email.';
+            break;
+          case 'invalid-email':
+            errorMessage = 'The email address is not valid.';
+            break;
+          case 'operation-not-allowed':
+            errorMessage = 'Email/password accounts are not enabled.';
+            break;
+          default:
+            errorMessage = 'An error occurred during registration.';
+        }
+        _showErrorDialog(errorMessage);
       }
     } catch (e) {
       if (mounted) {
-        _showErrorDialog(e.toString().replaceAll('Exception: ', ''));
+        _showErrorDialog('An unexpected error occurred. Please try again.');
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -99,7 +184,6 @@ class _RegisterPageState extends State<RegisterPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 20),
-              // Logo
               Container(
                 width: 100,
                 height: 100,
@@ -135,7 +219,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              // Title
               Text(
                 'Create Account',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -145,18 +228,16 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign up to get started',
+                'Register to get started',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 32),
-              // Form
               Form(
                 key: _formKey,
                 child: Column(
                   children: [
-                    // Name Field
                     TextFormField(
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
@@ -180,7 +261,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // Email Field
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -204,7 +284,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // Password Field
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -238,7 +317,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // Confirm Password Field
                     TextFormField(
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirmPassword,
@@ -272,7 +350,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 32),
-                    // Register Button
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -305,7 +382,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Login Link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

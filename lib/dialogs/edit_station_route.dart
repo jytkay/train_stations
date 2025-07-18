@@ -6,9 +6,9 @@ import 'package:group_assignment/firestore/save_reminders.dart';
 import 'package:group_assignment/dialogs/edit_reminder.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:developer' as dev;
 
-Future<void> showEditStationBottomSheet({
+Future<bool?> showEditStationBottomSheet({
+  required userId,
   required BuildContext context,
   required Map<String, dynamic> station,
 }) async {
@@ -27,9 +27,9 @@ Future<void> showEditStationBottomSheet({
       : station['photoUrl'];
   final lat = station['geometry']?['location']?['lat'];
   final lng = station['geometry']?['location']?['lng'];
-  final alreadySaved = await isStationSaved(placeId);
+  final alreadySaved = await isStationSaved(userId, placeId);
 
-  showModalBottomSheet(
+  return await showModalBottomSheet<bool>(
     context: context,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -53,45 +53,67 @@ Future<void> showEditStationBottomSheet({
             onTap: () async {
               final noteCtrl = TextEditingController();
               if (alreadySaved) {
-                final existing = await getSavedStationByPlaceId(placeId);
+                final existing = await getSavedStationByPlaceId(userId, placeId);
                 noteCtrl.text = existing?['note'] ?? '';
               }
+
               await _showNoteDialog(
                 context: context,
                 alreadySaved: alreadySaved,
                 noteCtrl: noteCtrl,
                 onDelete: () async {
-                  await removeStationByPlaceId(placeId);
-                  messenger.showSnackBar(
+                  await removeStationByPlaceId(userId, placeId);
+                  await messenger
+                      .showSnackBar(
                     const SnackBar(
                       content: Text('Station removed from saved'),
                       behavior: SnackBarBehavior.floating,
                     ),
-                  );
+                  )
+                      .closed;
+                  if (context.mounted) Navigator.of(context).pop(true);
                 },
                 onSave: () async {
-                  await saveStationToFirestore(
-                    placeId: placeId,
-                    name: name,
-                    address: address,
-                    phoneNumber: phone,
-                    websiteUrl: website,
-                    photoUrl: photoUrl,
-                    lat: lat,
-                    lng: lng,
-                    note: noteCtrl.text.trim(),
-                  );
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        alreadySaved ? 'Saved station updated' : 'Station saved',
+                  final note = noteCtrl.text.trim();
+                  if (alreadySaved) {
+                    await updateNoteForStation(
+                      userId: userId,
+                      placeId: placeId,
+                      note: note,
+                    );
+                    await messenger
+                        .showSnackBar(
+                      const SnackBar(
+                        content: Text('Saved station note updated'),
+                        behavior: SnackBarBehavior.floating,
                       ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                    )
+                        .closed;
+                  } else {
+                    await saveStationToFirestore(
+                      userId: userId,
+                      placeId: placeId,
+                      name: name,
+                      address: address,
+                      phoneNumber: phone,
+                      websiteUrl: website,
+                      photoUrl: photoUrl,
+                      lat: lat,
+                      lng: lng,
+                      note: note,
+                    );
+                    await messenger
+                        .showSnackBar(
+                      const SnackBar(
+                        content: Text('Station saved'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    )
+                        .closed;
+                  }
+                  if (context.mounted) Navigator.of(context).pop(true);
                 },
               );
-              Navigator.pop(context);
             },
           ),
         ],
@@ -100,7 +122,8 @@ Future<void> showEditStationBottomSheet({
   );
 }
 
-Future<void> showEditRouteBottomSheet({
+Future<bool?> showEditRouteBottomSheet({
+  required String userId,
   required BuildContext context,
   required String routeId,
   required Map<String, dynamic> routeDetailsRaw,
@@ -113,7 +136,6 @@ Future<void> showEditRouteBottomSheet({
   final messenger = ScaffoldMessenger.of(context);
   final alreadySaved = await isRouteSaved(routeId);
   final noteCtrl = TextEditingController();
-  const uid = '1000';
 
   if (alreadySaved) {
     final existing = await getSavedRouteById(routeId);
@@ -121,11 +143,10 @@ Future<void> showEditRouteBottomSheet({
   }
 
   final reminder = await getReminderForRoute(
-    userID: uid,
+    userId: userId,
     fromStation: fromStation,
     toStation: toStation,
   );
-
   final hasReminder = reminder != null;
 
   final rawDeparture = routeDetailsRaw['departure_time'];
@@ -133,12 +154,11 @@ Future<void> showEditRouteBottomSheet({
 
   String departureTimeFormatted = '';
   String arrivalTimeFormatted = '';
-  final formatter = DateFormat.jm(); // e.g., 6:05 PM
+  final formatter = DateFormat.jm();
 
   try {
     if (rawDeparture is String) {
-      final dt = DateTime.parse(rawDeparture);
-      departureTimeFormatted = formatter.format(dt);
+      departureTimeFormatted = formatter.format(DateTime.parse(rawDeparture));
     } else if (rawDeparture is Timestamp) {
       departureTimeFormatted = formatter.format(rawDeparture.toDate());
     }
@@ -146,8 +166,7 @@ Future<void> showEditRouteBottomSheet({
 
   try {
     if (rawArrival is String) {
-      final at = DateTime.parse(rawArrival);
-      arrivalTimeFormatted = formatter.format(at);
+      arrivalTimeFormatted = formatter.format(DateTime.parse(rawArrival));
     } else if (rawArrival is Timestamp) {
       arrivalTimeFormatted = formatter.format(rawArrival.toDate());
     }
@@ -161,7 +180,7 @@ Future<void> showEditRouteBottomSheet({
     arrivalTimeFormatted = formatter.format(now.add(const Duration(minutes: 10)));
   }
 
-  showModalBottomSheet(
+  return await showModalBottomSheet<bool>(
     context: context,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -196,27 +215,35 @@ Future<void> showEditRouteBottomSheet({
                 );
               },
               onSave: () async {
-                await saveRouteToFirestore(
-                  routeId: routeId,
-                  fromStation: fromStation,
-                  toStation: toStation,
-                  routeSteps: routeSteps,
-                  routeDetailsRaw: routeDetailsRaw,
-                  selectedDepartureDay: selectedDepartureDay,
-                  selectedTimeRange: selectedTimeRange,
-                  note: noteCtrl.text.trim(),
-                );
+                if (alreadySaved) {
+                  await updateNoteForRoute(
+                    userId: userId,
+                    routeId: routeId,
+                    newNote: noteCtrl.text.trim(),
+                  );
+                } else {
+                  await saveRouteToFirestore(
+                    userId: userId,
+                    routeId: routeId,
+                    fromStation: fromStation,
+                    toStation: toStation,
+                    routeSteps: routeSteps,
+                    routeDetailsRaw: routeDetailsRaw,
+                    selectedDepartureDay: selectedDepartureDay,
+                    selectedTimeRange: selectedTimeRange,
+                    note: noteCtrl.text.trim(),
+                  );
+                }
+
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text(
-                      alreadySaved ? 'Saved route updated' : 'Route saved',
-                    ),
+                    content: Text(alreadySaved ? 'Note updated' : 'Route saved'),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               },
             );
-            Navigator.pop(context);
+            Navigator.of(context).pop(true); // <- return true
           },
         ),
         ListTile(
@@ -232,9 +259,8 @@ Future<void> showEditRouteBottomSheet({
             ),
           ),
           onTap: () async {
-            Navigator.pop(context);
-
-            final result = await showDialog<Map<String, dynamic>>(
+            Navigator.of(context).pop(true); // <- also return true to indicate update
+            await showDialog<Map<String, dynamic>>(
               context: context,
               builder: (_) => EditReminderDialog(
                 documentId: hasReminder ? reminder['documentId'] as String : '',
@@ -248,7 +274,7 @@ Future<void> showEditRouteBottomSheet({
                 currentStatus: hasReminder ? reminder['notificationStatus'] ?? true : true,
                 hasReminder: hasReminder,
                 routeDetails: {
-                  'userID': uid,
+                  'userId': userId,
                   'routeId': routeId,
                   'fromStation': fromStation,
                   'toStation': toStation,
@@ -311,7 +337,7 @@ Future<void> _showNoteDialog({
                         backgroundColor: const Color(0xFFFF8A80),
                       ),
                       onPressed: () async {
-                        Navigator.pop(context);
+                        Navigator.of(context).pop(true);
                         await onDelete();
                       },
                       child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -327,7 +353,7 @@ Future<void> _showNoteDialog({
                           : const Color(0xFFF48FB1),
                     ),
                     onPressed: () async {
-                      Navigator.pop(context);
+                      Navigator.of(context).pop(true);
                       await onSave();
                     },
                     child: Text(

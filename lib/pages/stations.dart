@@ -10,7 +10,8 @@ import 'dart:math';
 import 'dart:developer' as dev;
 
 class StationsPage extends StatefulWidget {
-  const StationsPage({super.key});
+  final String userId;
+  const StationsPage({super.key, required this.userId});
 
   @override
   State<StationsPage> createState() => _StationsPageState();
@@ -117,6 +118,7 @@ class _StationsPageState extends State<StationsPage> {
       }) async {
     if (_isLoading) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       if (!loadMore) {
@@ -182,8 +184,8 @@ class _StationsPageState extends State<StationsPage> {
           _isLoading = false;
         });
       } else {
-        setState(() => _isLoading = false);
         if (mounted) {
+          setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to fetch data from Google API'),
@@ -793,6 +795,7 @@ class _StationsPageState extends State<StationsPage> {
             final routeRaw  = _routeOptions[_selectedRouteIndex];
 
             await showEditRouteBottomSheet(
+              userId: widget.userId,
               context: context,
               routeId: routeId,
               routeDetailsRaw: Map<String, dynamic>.from(routeRaw),
@@ -1004,6 +1007,7 @@ class _StationsPageState extends State<StationsPage> {
         );
       },
       onLongPress: () => showEditStationBottomSheet(
+        userId: widget.userId,
         context: context,
         station: Map<String, dynamic>.from(station),
       ),
@@ -1210,6 +1214,7 @@ class _StationsPageState extends State<StationsPage> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => MainScaffold(
+                      userId: widget.userId,
                       initialIndex: 2,
                       lat: lat,
                       lng: lng,

@@ -96,9 +96,6 @@ class _MapPageState extends State<MapPage> {
   bool isDestinationVisible = true;
   bool isCurrentLocationFocused = false;
 
-
-
-
   GoogleMapController? mapController;
   Set<Marker> markers = {};
 

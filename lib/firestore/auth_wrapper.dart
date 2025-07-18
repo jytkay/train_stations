@@ -1,3 +1,4 @@
+// Determines page based on user authentication status (logged in/not)
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:group_assignment/pages/login.dart';
@@ -20,9 +21,10 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // If user is logged in, show main app
+        // If user is logged in, show main app with user ID
         if (snapshot.hasData && snapshot.data != null) {
-          return const MainScaffold();
+          final userId = snapshot.data!.uid;
+          return MainScaffold(userId: userId);
         }
 
         // If user is not logged in, show login page

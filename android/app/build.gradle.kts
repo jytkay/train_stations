@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "inti.edu.group_assignment"
-        minSdk = flutter.minSdkVersion
+        minSdk = 33
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

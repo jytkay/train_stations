@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MainScaffold extends StatefulWidget {
+  final String userId;
   final int initialIndex;
   final double? lat;
   final double? lng;
@@ -18,6 +19,7 @@ class MainScaffold extends StatefulWidget {
 
   const MainScaffold({
     super.key,
+    required this.userId,
     this.initialIndex = 0,
     this.lat,
     this.lng,
@@ -34,7 +36,7 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   late int _selectedIndex;
   Timer? _reminderTimer;
-  final String userID = "1000"; // Your user ID
+  late final String userId;
   final CollectionReference _remindersCollection =
   FirebaseFirestore.instance.collection('savedReminders');
 
@@ -42,6 +44,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    userId = widget.userId;
 
     _fetchAndNotify(); // Run once on start
     _reminderTimer = Timer.periodic(
@@ -71,7 +74,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       );
 
       final snapshot = await _remindersCollection
-          .where('userID', isEqualTo: userID)
+          .where('userId', isEqualTo: userId)
           .where('notificationStatus', isEqualTo: true)
           .get();
 
@@ -171,11 +174,11 @@ class _MainScaffoldState extends State<MainScaffold> {
     final Color activeColor = Colors.pink.shade700;
 
     final List<Widget> pages = [
-      const StationsPage(),
-      const SavedPage(),
+      StationsPage(userId: userId),
+      SavedPage(userId: userId),
       MapPage(lat: widget.lat, lng: widget.lng, name: widget.name, address: widget.address, photoUrl: widget.photoUrl),
-      const RemindersPage(),
-      const SettingsPage(),
+      RemindersPage(userId: userId),
+      SettingsPage(userId: userId),
     ];
 
     return Scaffold(

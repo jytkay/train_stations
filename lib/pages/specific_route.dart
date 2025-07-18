@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as dev;
 
 class SpecificRoutePage extends StatefulWidget {
@@ -24,78 +23,6 @@ class _SpecificRoutePageState extends State<SpecificRoutePage> {
     _route = widget.route;
     dev.log("SpecificRoutePage route: $_route");
   }
-
-  Future<void> _deleteRoute() async {
-    final routeId = _route['routeId'] ?? '';
-    if (routeId.isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('savedRoutes')
-          .where('routeId', isEqualTo: routeId)
-          .limit(1)
-          .get();
-
-      if (query.docs.isNotEmpty) {
-        await query.docs.first.reference.delete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Route deleted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pop(context);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting route: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  // void _showDeleteDialog() {
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) => AlertDialog(
-  //       backgroundColor: const Color(0xFFFFF1F4),
-  //       title: const Text('Delete Route'),
-  //       content: const Text('Are you sure you want to delete this saved route?'),
-  //       actions: [
-  //         TextButton(
-  //           onPressed: () => Navigator.pop(context),
-  //           child: const Text('Cancel', style: TextStyle(color: Colors.blue)),
-  //         ),
-  //         ElevatedButton(
-  //           style: ElevatedButton.styleFrom(
-  //             backgroundColor: const Color(0xFFFF8A80),
-  //           ),
-  //           onPressed: () {
-  //             Navigator.pop(context);
-  //             _deleteRoute();
-  //           },
-  //           child: const Text('Delete', style: TextStyle(color: Colors.white)),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 
   Widget _buildRouteHeader() {
     final fromStation = _route['fromStation'] ?? 'Unknown';

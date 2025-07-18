@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 final _remindersCollection = FirebaseFirestore.instance.collection('savedReminders');
 
-Future<List<Map<String, dynamic>>> getRemindersByUser(String userID) async {
-  final query = await _remindersCollection.where('userID', isEqualTo: userID).get();
+Future<List<Map<String, dynamic>>> getRemindersByUser(String userId) async {
+  final query = await _remindersCollection.where('userId', isEqualTo: userId).get();
   return query.docs.map((doc) {
     final data = doc.data();
     data['documentId'] = doc.id;
@@ -12,7 +12,7 @@ Future<List<Map<String, dynamic>>> getRemindersByUser(String userID) async {
 }
 
 Future<void> saveReminderToFirestore({
-  required String userID,
+  required String userId,
   required String routeId,
   required String fromStation,
   required String toStation,
@@ -25,7 +25,7 @@ Future<void> saveReminderToFirestore({
   List<Map<String, dynamic>>? routeSteps,
 }) async {
   await _remindersCollection.add({
-    'userID': userID,
+    'userId': userId,
     'routeId': routeId,
     'fromStation': fromStation,
     'toStation': toStation,
@@ -78,12 +78,12 @@ Future<void> deleteReminder(String documentId) async {
 }
 
 Future<bool> hasReminderForRoute({
-  required String userID,
+  required String userId,
   required String fromStation,
   required String toStation,
 }) async {
   final query = await _remindersCollection
-      .where('userID', isEqualTo: userID)
+      .where('userId', isEqualTo: userId)
       .where('fromStation', isEqualTo: fromStation)
       .where('toStation', isEqualTo: toStation)
       .get();
@@ -92,12 +92,12 @@ Future<bool> hasReminderForRoute({
 }
 
 Future<Map<String, dynamic>?> getReminderForRoute({
-  required String userID,
+  required String userId,
   required String fromStation,
   required String toStation,
 }) async {
   final query = await _remindersCollection
-      .where('userID', isEqualTo: userID)
+      .where('userId', isEqualTo: userId)
       .where('fromStation', isEqualTo: fromStation)
       .where('toStation', isEqualTo: toStation)
       .limit(1)
